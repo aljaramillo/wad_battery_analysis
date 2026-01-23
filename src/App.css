@@ -1,0 +1,205 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 2rem;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.app-header h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.app-header p {
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.app-main {
+  flex: 1;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.top-section {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.upload-section {
+  flex: 0 0 25%;
+  min-width: 250px;
+}
+
+.sessions-section {
+  flex: 1;
+}
+
+.sessions-list {
+  background: white;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.sessions-list h2 {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+  color: #2c3e50;
+}
+
+.sessions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e1e8ed;
+  border-radius: 6px;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.session-item:hover {
+  border-color: #667eea;
+  background-color: #f8f9fa;
+}
+
+.session-item.selected {
+  border-color: #667eea;
+  background-color: #f0f4ff;
+}
+
+.session-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.session-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.session-name-input {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #2c3e50;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.session-name-input:hover {
+  background: rgba(102, 126, 234, 0.05);
+  border-color: #e1e8ed;
+}
+
+.session-name-input:focus {
+  background: white;
+  border-color: #667eea;
+}
+
+.session-name-input::placeholder {
+  color: #bdc3c7;
+  font-weight: 400;
+}
+
+.session-metadata {
+  font-size: 0.8rem;
+  color: #95a5a6;
+}
+
+.remove-btn {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.remove-btn:hover {
+  opacity: 1;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #95a5a6;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: #7f8c8d;
+}
+
+.empty-state p {
+  font-size: 1rem;
+}
+
+/* Dual Comparison Layout */
+.dual-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.comparison-column {
+  min-width: 0;
+}
+
+.comparison-session-title {
+  font-size: 1.3rem;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 8px;
+  text-align: center;
+}
+
+/* Force single column layout for charts in dual comparison */
+.comparison-column .charts-grid {
+  grid-template-columns: 1fr !important;
+}
+

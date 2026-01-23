@@ -1,0 +1,83 @@
+.chart-tooltip-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.5rem;
+}
+
+.tooltip-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #667eea;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+  font-weight: bold;
+}
+
+.tooltip-icon:hover {
+  background: #5568d3;
+  transform: scale(1.1);
+}
+
+.tooltip-bubble {
+  position: absolute;
+  left: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #2c3e50;
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 300px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  white-space: normal;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.tooltip-bubble::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-right: 8px solid #2c3e50;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .tooltip-bubble {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 90vw;
+  }
+
+  .tooltip-bubble::before {
+    display: none;
+  }
+}

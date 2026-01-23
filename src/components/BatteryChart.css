@@ -1,0 +1,24 @@
+.battery-chart {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.battery-chart .chart-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.battery-chart .chart-header h3 {
+  font-size: 1.1rem;
+  color: #34495e;
+  margin: 0;
+}
+
+.chart-container {
+  height: 400px;
+  position: relative;
+}
