@@ -26,6 +26,10 @@ export const calculateStatistics = (data) => {
   const firstValidLsIdx = lsBatteryRaw.findIndex(v => v >= 0)
   const lastValidLsIdx = lsBatteryRaw.findLastIndex(v => v >= 0)
 
+  // Calcular el tiempo real de cada dispositivo (desde su inicio hasta su fin)
+  const wadRealTime = (lastValidWadIdx - firstValidWadIdx) / 6 // minutos
+  const lsRealTime = (lastValidLsIdx - firstValidLsIdx) / 6 // minutos
+
   return {
     wad: {
       initial: firstValidWadIdx >= 0 ? wadBatteryRaw[firstValidWadIdx] : 0,
@@ -33,8 +37,8 @@ export const calculateStatistics = (data) => {
       drop: firstValidWadIdx >= 0 && lastValidWadIdx >= 0 
         ? wadBatteryRaw[firstValidWadIdx] - wadBatteryRaw[lastValidWadIdx] 
         : 0,
-      avgConsumption: wadBattery.length > 1 
-        ? (wadBattery[0] - wadBattery[wadBattery.length - 1]) / (wadBattery.length / 6) 
+      avgConsumption: wadRealTime > 0 && firstValidWadIdx >= 0 && lastValidWadIdx >= 0
+        ? (wadBatteryRaw[firstValidWadIdx] - wadBatteryRaw[lastValidWadIdx]) / wadRealTime 
         : 0,
       maxDurationEstimate: wadDuration.length > 0 ? Math.max(...wadDuration) : 0,
       minDurationEstimate: wadDuration.length > 0 ? Math.min(...wadDuration.filter(v => v > 0)) : 0,
@@ -45,8 +49,8 @@ export const calculateStatistics = (data) => {
       drop: firstValidLsIdx >= 0 && lastValidLsIdx >= 0 
         ? lsBatteryRaw[firstValidLsIdx] - lsBatteryRaw[lastValidLsIdx] 
         : 0,
-      avgConsumption: lsBattery.length > 1 
-        ? (lsBattery[0] - lsBattery[lsBattery.length - 1]) / (lsBattery.length / 6) 
+      avgConsumption: lsRealTime > 0 && firstValidLsIdx >= 0 && lastValidLsIdx >= 0
+        ? (lsBatteryRaw[firstValidLsIdx] - lsBatteryRaw[lastValidLsIdx]) / lsRealTime 
         : 0,
       maxDurationEstimate: lsDuration.length > 0 ? Math.max(...lsDuration) : 0,
       minDurationEstimate: lsDuration.length > 0 ? Math.min(...lsDuration.filter(v => v > 0)) : 0,
@@ -56,6 +60,13 @@ export const calculateStatistics = (data) => {
 
 export const analyzeDurationAccuracy = (data) => {
   const results = []
+  
+  // Calcular el tiempo real de cada dispositivo basándose en cuándo llegan a -1
+  const wadEndIndex = data.findIndex(row => row['WAD Battery %'] < 0)
+  const lsEndIndex = data.findIndex(row => row['Light Source %'] < 0)
+  
+  const wadTotalTime = wadEndIndex >= 0 ? wadEndIndex / 6 : data.length / 6
+  const lsTotalTime = lsEndIndex >= 0 ? lsEndIndex / 6 : data.length / 6
   
   for (let i = 0; i < data.length; i++) {
     const row = data[i]
@@ -68,19 +79,19 @@ export const analyzeDurationAccuracy = (data) => {
     // Ignorar filas donde los dispositivos están apagados (-1)
     if (wadBattery < 0 || lsBattery < 0) continue
     
-    // Calculate how much time is actually remaining
-    const totalTime = data.length / 6
-    const actualRemaining = totalTime - timeElapsed
+    // Calculate how much time is actually remaining for each device independently
+    const wadActualRemaining = wadTotalTime - timeElapsed
+    const lsActualRemaining = lsTotalTime - timeElapsed
     
     if (wadEstimate > 0) {
       results.push({
         time: row['Surgery Time'],
         wadEstimate,
-        wadActual: actualRemaining,
-        wadError: Math.abs(wadEstimate - actualRemaining),
+        wadActual: wadActualRemaining,
+        wadError: Math.abs(wadEstimate - wadActualRemaining),
         lsEstimate: lsEstimate || 0,
-        lsActual: actualRemaining,
-        lsError: lsEstimate ? Math.abs(lsEstimate - actualRemaining) : 0
+        lsActual: lsActualRemaining,
+        lsError: lsEstimate ? Math.abs(lsEstimate - lsActualRemaining) : 0
       })
     }
   }
