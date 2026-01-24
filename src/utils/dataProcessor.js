@@ -1,3 +1,74 @@
+// ========== FASE 1: DETECCIÓN CORRECTA DEL FIN DE DISPOSITIVOS ==========
+
+/**
+ * Encuentra el último bloque continuo de valores -1 y retorna el último índice válido
+ * antes de ese bloque final. 
+ * IMPORTANTE: Un valor -1 indica apagado. Un valor 0 es válido (0% batería o intensidad 0).
+ */
+const findLastValidIndex = (data, field) => {
+  const values = data.map(row => row[field])
+  
+  // Buscar desde el final hacia atrás el primer valor que NO sea -1
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (values[i] !== -1) {
+      return i
+    }
+  }
+  
+  return -1 // Todo el array es -1
+}
+
+/**
+ * Encuentra el índice donde empieza el último bloque continuo de -1
+ */
+const findFinalShutdownIndex = (data, field) => {
+  const lastValidIdx = findLastValidIndex(data, field)
+  
+  if (lastValidIdx < 0) return 0 // Todo es -1
+  if (lastValidIdx === data.length - 1) return data.length // No hay bloque final de -1
+  
+  return lastValidIdx + 1 // El siguiente índice después del último válido
+}
+
+// ========== FASE 2: SEPARAR DATOS POR DISPOSITIVO ==========
+
+/**
+ * Retorna solo los datos válidos del WAD (hasta que batería < 0)
+ */
+export const getWADValidData = (data) => {
+  const endIdx = findFinalShutdownIndex(data, 'WAD Battery %')
+  return data.slice(0, endIdx)
+}
+
+/**
+ * Retorna solo los datos válidos de la LS (hasta el último bloque continuo de intensidad -1)
+ */
+export const getLSValidData = (data) => {
+  // Debug: ver valores de intensidad alrededor de la línea 425 y 868
+  console.log('🔍 DEBUG getLSValidData:')
+  console.log('- Data length:', data.length)
+  console.log('- Intensity at 424:', data[424]?.['Light Source Intensity'])
+  console.log('- Intensity at 425:', data[425]?.['Light Source Intensity'])
+  console.log('- Intensity at 426:', data[426]?.['Light Source Intensity'])
+  console.log('- Intensity at 866:', data[866]?.['Light Source Intensity'])
+  console.log('- Intensity at 867:', data[867]?.['Light Source Intensity'])
+  console.log('- Intensity at 868:', data[868]?.['Light Source Intensity'])
+  
+  const endIdx = findFinalShutdownIndex(data, 'Light Source Intensity')
+  console.log('- endIdx from findFinalShutdownIndex:', endIdx)
+  
+  return data.slice(0, endIdx)
+}
+
+/**
+ * Obtiene el timeline (labels) de un conjunto de datos filtrado
+ */
+export const getDeviceTimeline = (validData) => {
+  return validData.map(row => row['Surgery Time'])
+}
+
+// ========== FUNCIONES ORIGINALES ACTUALIZADAS ==========
+
 export const processChartData = (data) => {
   return {
     labels: data.map(row => row['Surgery Time']),
@@ -11,24 +82,27 @@ export const processChartData = (data) => {
 }
 
 export const calculateStatistics = (data) => {
-  // Filtrar valores -1 (dispositivo apagado) para cálculos estadísticos
-  const wadBattery = data.map(row => row['WAD Battery %']).filter(v => v != null && v >= 0)
-  const lsBattery = data.map(row => row['Light Source %']).filter(v => v != null && v >= 0)
-  const wadDuration = data.map(row => row['WAD Duration (min)']).filter(v => v != null && v > 0)
-  const lsDuration = data.map(row => row['Light Source Duration (min)']).filter(v => v != null && v > 0)
-
-  // Encontrar índice del primer y último valor válido de batería
-  const wadBatteryRaw = data.map(row => row['WAD Battery %'])
-  const lsBatteryRaw = data.map(row => row['Light Source %'])
+  // Usar datos filtrados de cada dispositivo
+  const wadValidData = getWADValidData(data)
+  const lsValidData = getLSValidData(data)
   
+  // Extraer valores de batería
+  const wadBatteryRaw = wadValidData.map(row => row['WAD Battery %'])
+  const lsBatteryRaw = lsValidData.map(row => row['Light Source %'])
+  
+  // Encontrar primer y último índice válido
   const firstValidWadIdx = wadBatteryRaw.findIndex(v => v >= 0)
   const lastValidWadIdx = wadBatteryRaw.findLastIndex(v => v >= 0)
   const firstValidLsIdx = lsBatteryRaw.findIndex(v => v >= 0)
   const lastValidLsIdx = lsBatteryRaw.findLastIndex(v => v >= 0)
-
-  // Calcular el tiempo real de cada dispositivo (desde su inicio hasta su fin)
-  const wadRealTime = (lastValidWadIdx - firstValidWadIdx) / 6 // minutos
-  const lsRealTime = (lastValidLsIdx - firstValidLsIdx) / 6 // minutos
+  
+  // Calcular tiempos reales (cada registro = 10 segundos = 1/6 minuto)
+  const wadRealTime = wadValidData.length / 6 // minutos
+  const lsRealTime = lsValidData.length / 6 // minutos
+  
+  // Extraer duraciones estimadas (filtrar valores válidos)
+  const wadDuration = wadValidData.map(row => row['WAD Duration (min)']).filter(v => v != null && v > 0)
+  const lsDuration = lsValidData.map(row => row['Light Source Duration (min)']).filter(v => v != null && v > 0)
 
   return {
     wad: {
@@ -58,45 +132,77 @@ export const calculateStatistics = (data) => {
   }
 }
 
-export const analyzeDurationAccuracy = (data) => {
+// ========== FASE 3: ANÁLISIS DE PRECISIÓN POR DISPOSITIVO ==========
+
+/**
+ * Analiza la precisión de estimación del WAD
+ * Retorna array con datos solo del WAD
+ */
+export const analyzeWADAccuracy = (data) => {
+  const wadValidData = getWADValidData(data)
   const results = []
+  const totalTime = wadValidData.length / 6 // minutos totales
   
-  // Calcular el tiempo real de cada dispositivo basándose en cuándo llegan a -1
-  const wadEndIndex = data.findIndex(row => row['WAD Battery %'] < 0)
-  const lsEndIndex = data.findIndex(row => row['Light Source %'] < 0)
-  
-  const wadTotalTime = wadEndIndex >= 0 ? wadEndIndex / 6 : data.length / 6
-  const lsTotalTime = lsEndIndex >= 0 ? lsEndIndex / 6 : data.length / 6
-  
-  for (let i = 0; i < data.length; i++) {
-    const row = data[i]
-    const timeElapsed = i / 6 // minutes elapsed (every 10 seconds)
+  for (let i = 0; i < wadValidData.length; i++) {
+    const row = wadValidData[i]
+    const timeElapsed = i / 6
     const wadEstimate = row['WAD Duration (min)']
-    const lsEstimate = row['Light Source Duration (min)']
     const wadBattery = row['WAD Battery %']
-    const lsBattery = row['Light Source %']
     
-    // Ignorar filas donde los dispositivos están apagados (-1)
-    if (wadBattery < 0 || lsBattery < 0) continue
-    
-    // Calculate how much time is actually remaining for each device independently
-    const wadActualRemaining = wadTotalTime - timeElapsed
-    const lsActualRemaining = lsTotalTime - timeElapsed
-    
-    if (wadEstimate > 0) {
+    // Solo excluir si batería es -1 (apagado)
+    if (wadBattery !== -1 && wadEstimate >= 0) {
+      const actualRemaining = totalTime - timeElapsed
+      
       results.push({
         time: row['Surgery Time'],
-        wadEstimate,
-        wadActual: wadActualRemaining,
-        wadError: Math.abs(wadEstimate - wadActualRemaining),
-        lsEstimate: lsEstimate || 0,
-        lsActual: lsActualRemaining,
-        lsError: lsEstimate ? Math.abs(lsEstimate - lsActualRemaining) : 0
+        estimate: wadEstimate,
+        actual: actualRemaining,
+        error: Math.abs(wadEstimate - actualRemaining)
       })
     }
   }
   
   return results
+}
+
+/**
+ * Analiza la precisión de estimación de la LS
+ * Retorna array con datos solo de la LS
+ */
+export const analyzeLSAccuracy = (data) => {
+  const lsValidData = getLSValidData(data)
+  const results = []
+  const totalTime = lsValidData.length / 6 // minutos totales
+  
+  for (let i = 0; i < lsValidData.length; i++) {
+    const row = lsValidData[i]
+    const timeElapsed = i / 6
+    const lsEstimate = row['Light Source Duration (min)']
+    const lsIntensity = row['Light Source Intensity']
+    
+    // Solo excluir si intensidad es -1 (apagado)
+    if (lsIntensity !== -1 && lsEstimate >= 0) {
+      const actualRemaining = totalTime - timeElapsed
+      
+      results.push({
+        time: row['Surgery Time'],
+        estimate: lsEstimate,
+        actual: actualRemaining,
+        error: Math.abs(lsEstimate - actualRemaining)
+      })
+    }
+  }
+  
+  return results
+}
+
+/**
+ * DEPRECATED: Mantener por compatibilidad pero retorna datos separados
+ * Usar analyzeWADAccuracy y analyzeLSAccuracy en su lugar
+ */
+export const analyzeDurationAccuracy = (data) => {
+  console.warn('analyzeDurationAccuracy is deprecated. Use analyzeWADAccuracy and analyzeLSAccuracy instead.')
+  return analyzeWADAccuracy(data)
 }
 
 export const getColorForSession = (index) => {

@@ -1,7 +1,15 @@
 import { Line } from 'react-chartjs-2'
 import { Chart as ChartJS } from 'chart.js'
 import annotationPlugin from 'chartjs-plugin-annotation'
-import { calculateStatistics, analyzeDurationAccuracy, processChartData } from '../utils/dataProcessor'
+import { 
+  calculateStatistics, 
+  analyzeWADAccuracy, 
+  analyzeLSAccuracy,
+  processChartData,
+  getWADValidData,
+  getLSValidData,
+  getDeviceTimeline
+} from '../utils/dataProcessor'
 import ChartTooltip from './ChartTooltip'
 import './StatisticsPanel.css'
 
@@ -9,12 +17,83 @@ ChartJS.register(annotationPlugin)
 
 function StatisticsPanel({ session, onNotesChange }) {
   const stats = calculateStatistics(session.data)
-  const accuracyData = analyzeDurationAccuracy(session.data)
+  
+  // Obtener datos válidos para cada dispositivo PRIMERO
+  const wadValidData = getWADValidData(session.data)
+  const lsValidData = getLSValidData(session.data)
+  
+  // DEBUG: Ver cuántos datos tenemos
+  console.log('📊 DEBUG - Longitudes de datos:')
+  console.log('- Total datos:', session.data.length)
+  console.log('- WAD válidos:', wadValidData.length)
+  console.log('- LS válidos:', lsValidData.length)
+  console.log('- Último WAD Battery %:', session.data[session.data.length - 1]['WAD Battery %'])
+  console.log('- Último LS Intensity:', session.data[session.data.length - 1]['Light Source Intensity'])
+  
+  // DEBUG: Ver últimas 5 filas de WAD
+  console.log('📊 DEBUG - Últimas 5 filas de WAD válidas:')
+  for (let i = Math.max(0, wadValidData.length - 5); i < wadValidData.length; i++) {
+    console.log(`  [${i}] Battery: ${wadValidData[i]['WAD Battery %']}, Duration: ${wadValidData[i]['WAD Duration (min)']}`)
+  }
+  
+  // Análisis de precisión separado por dispositivo - USAR DATOS FILTRADOS
+  const wadAccuracyData = analyzeWADAccuracy(wadValidData)
+  const lsAccuracyData = analyzeLSAccuracy(lsValidData)
+  
+  console.log('📊 DEBUG - Accuracy Data:')
+  console.log('- wadAccuracyData.length:', wadAccuracyData.length)
+  console.log('- lsAccuracyData.length:', lsAccuracyData.length)
+  console.log('- Último tiempo WAD accuracy:', wadAccuracyData[wadAccuracyData.length - 1]?.time)
+  console.log('- Último tiempo LS accuracy:', lsAccuracyData[lsAccuracyData.length - 1]?.time)
+  
+  // Datos de gráficas (completos, para uso general)
   const chartData = processChartData(session.data)
 
-  // Sample data (every minute)
-  const sampledAccuracy = accuracyData.filter((_, idx) => idx % 6 === 0)
+  // Sample data (every minute) - SEPARADO POR DISPOSITIVO
+  const wadAccuracyTemp = wadAccuracyData.filter((_, idx) => idx % 6 === 0)
+  const sampledWadAccuracy = wadAccuracyTemp[wadAccuracyTemp.length - 1] === wadAccuracyData.length - 1
+    ? wadAccuracyTemp
+    : [...wadAccuracyTemp, wadAccuracyData[wadAccuracyData.length - 1]]
+    
+  const lsAccuracyTemp = lsAccuracyData.filter((_, idx) => idx % 6 === 0)
+  const sampledLsAccuracy = lsAccuracyTemp[lsAccuracyTemp.length - 1] === lsAccuracyData.length - 1
+    ? lsAccuracyTemp
+    : [...lsAccuracyTemp, lsAccuracyData[lsAccuracyData.length - 1]]
+
+  console.log('📊 DEBUG - Sampled Accuracy:')
+  console.log('- sampledWadAccuracy.length:', sampledWadAccuracy.length)
+  console.log('- sampledLsAccuracy.length:', sampledLsAccuracy.length)
+  console.log('- Último tiempo WAD sampled:', sampledWadAccuracy[sampledWadAccuracy.length - 1]?.time)
+  console.log('- Último tiempo LS sampled:', sampledLsAccuracy[sampledLsAccuracy.length - 1]?.time)
+  
+  // Indices para gráficas que usan datos completos (estos se filtrarán después)
   const sampledIndices = chartData.labels.map((_, idx) => idx).filter((_, idx) => idx % 6 === 0)
+  
+  // Crear datos procesados solo para el rango válido de LS
+  const lsChartData = processChartData(lsValidData)
+  const lsSampledTemp = lsChartData.labels.map((_, idx) => idx).filter((_, idx) => idx % 6 === 0)
+  const sampledLsIndices = lsSampledTemp[lsSampledTemp.length - 1] === lsChartData.labels.length - 1 
+    ? lsSampledTemp 
+    : [...lsSampledTemp, lsChartData.labels.length - 1]
+
+  console.log('📊 DEBUG - LS Chart Data:')
+  console.log('- lsChartData.labels.length:', lsChartData.labels.length)
+  console.log('- sampledLsIndices.length:', sampledLsIndices.length)
+  console.log('- Último label LS:', lsChartData.labels[lsChartData.labels.length - 1])
+  console.log('- Último sampledLsIndex:', sampledLsIndices[sampledLsIndices.length - 1])
+  
+  // Crear datos procesados solo para el rango válido de WAD
+  const wadChartData = processChartData(wadValidData)
+  const wadSampledTemp = wadChartData.labels.map((_, idx) => idx).filter((_, idx) => idx % 6 === 0)
+  const sampledWadIndices = wadSampledTemp[wadSampledTemp.length - 1] === wadChartData.labels.length - 1 
+    ? wadSampledTemp 
+    : [...wadSampledTemp, wadChartData.labels.length - 1]
+
+  console.log('📊 DEBUG - WAD Chart Data:')
+  console.log('- wadChartData.labels.length:', wadChartData.labels.length)
+  console.log('- sampledWadIndices.length:', sampledWadIndices.length)
+  console.log('- Último label WAD:', wadChartData.labels[wadChartData.labels.length - 1])
+  console.log('- Último sampledWadIndex:', sampledWadIndices[sampledWadIndices.length - 1])
 
   const chartOptions = {
     responsive: true,
@@ -54,80 +133,86 @@ function StatisticsPanel({ session, onNotesChange }) {
     }
   }
 
-  // WAD Accuracy Chart
-  const wadAccuracyData = {
-    labels: sampledAccuracy.map(d => d.time),
+  // WAD Accuracy Chart - USA SOLO DATOS DE WAD
+  const wadAccuracyChartData = {
+    labels: sampledWadAccuracy.map(d => d.time),
     datasets: [
       {
         label: 'WAD Estimación (min)',
-        data: sampledAccuracy.map(d => d.wadEstimate),
+        data: sampledWadAccuracy.map(d => d.estimate),
         borderColor: '#667eea',
         backgroundColor: 'rgba(102, 126, 234, 0.1)',
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.4,
-        fill: true
+        fill: true,
+        spanGaps: false
       },
       {
         label: 'Tiempo Real Restante (min)',
-        data: sampledAccuracy.map(d => d.wadActual),
+        data: sampledWadAccuracy.map(d => d.actual),
         borderColor: '#e74c3c',
         backgroundColor: 'rgba(231, 76, 60, 0.1)',
         borderWidth: 2,
         borderDash: [5, 5],
         pointRadius: 0,
         tension: 0.4,
-        fill: true
+        fill: true,
+        spanGaps: false
       },
       {
         label: 'Error de Estimación (min)',
-        data: sampledAccuracy.map(d => d.wadError),
+        data: sampledWadAccuracy.map(d => d.error),
         borderColor: '#f39c12',
         backgroundColor: 'rgba(243, 156, 18, 0.2)',
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.4,
         fill: true,
-        hidden: true
+        hidden: true,
+        spanGaps: false
       }
     ]
   }
 
-  // Light Source Accuracy Chart
-  const lsAccuracyData = {
-    labels: sampledAccuracy.map(d => d.time),
+  // Light Source Accuracy Chart - USA SOLO DATOS DE LS
+  const lsAccuracyChartData = {
+    labels: sampledLsAccuracy.map(d => d.time),
     datasets: [
       {
         label: 'LS Estimación (min)',
-        data: sampledAccuracy.map(d => d.lsEstimate),
+        data: sampledLsAccuracy.map(d => d.estimate),
         borderColor: '#f093fb',
         backgroundColor: 'rgba(240, 147, 251, 0.1)',
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.4,
-        fill: true
+        fill: true,
+        spanGaps: false
       },
       {
         label: 'Tiempo Real Restante (min)',
-        data: sampledAccuracy.map(d => d.lsActual),
+        data: sampledLsAccuracy.map(d => d.actual),
         borderColor: '#e74c3c',
         backgroundColor: 'rgba(231, 76, 60, 0.1)',
         borderWidth: 2,
         borderDash: [5, 5],
         pointRadius: 0,
         tension: 0.4,
-        fill: true
+        fill: true,
+        spanGaps: false
       },
       {
         label: 'Error de Estimación (min)',
-        data: sampledAccuracy.map(d => d.lsError),
+        data: sampledLsAccuracy.map(d => d.error),
         borderColor: '#9b59b6',
         backgroundColor: 'rgba(155, 89, 182, 0.2)',
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.4,
         fill: true,
-        hidden: true
+        hidden: true,
+        spanGaps: false
       }
     ]
   }
@@ -159,33 +244,53 @@ function StatisticsPanel({ session, onNotesChange }) {
     ]
   }
 
-  // Discharge Rate Chart
-  const dischargeRates = sampledIndices.map((idx, i) => {
+  // Discharge Rate Chart - SEPARADO POR DISPOSITIVO
+  const wadDischargeRates = sampledWadIndices.map((idx, i) => {
     if (i === 0) return 0
-    const prevIdx = sampledIndices[i - 1]
-    const currentWad = chartData.wadBattery[idx]
-    const prevWad = chartData.wadBattery[prevIdx]
-    // Ignorar cálculos cuando hay valores -1
-    if (currentWad < 0 || prevWad < 0) return null
+    const prevIdx = sampledWadIndices[i - 1]
+    const currentWad = wadChartData.wadBattery[idx]
+    const prevWad = wadChartData.wadBattery[prevIdx]
     return prevWad - currentWad
   })
 
-  const lsDischargeRates = sampledIndices.map((idx, i) => {
+  const lsDischargeRates = sampledLsIndices.map((idx, i) => {
     if (i === 0) return 0
-    const prevIdx = sampledIndices[i - 1]
-    const currentLs = chartData.lightSourceBattery[idx]
-    const prevLs = chartData.lightSourceBattery[prevIdx]
-    // Ignorar cálculos cuando hay valores -1
-    if (currentLs < 0 || prevLs < 0) return null
+    const prevIdx = sampledLsIndices[i - 1]
+    const currentLs = lsChartData.lightSourceBattery[idx]
+    const prevLs = lsChartData.lightSourceBattery[prevIdx]
     return prevLs - currentLs
   })
 
+  // Usar el timeline más largo para la gráfica de comparación
+  const maxLength = Math.max(sampledWadIndices.length, sampledLsIndices.length)
+  const combinedLabels = []
+  const combinedWadRates = []
+  const combinedLsRates = []
+  
+  for (let i = 0; i < maxLength; i++) {
+    if (i < sampledWadIndices.length) {
+      combinedLabels.push(wadChartData.labels[sampledWadIndices[i]])
+      combinedWadRates.push(wadDischargeRates[i])
+    } else {
+      combinedWadRates.push(null)
+    }
+    
+    if (i < sampledLsIndices.length) {
+      if (i >= sampledWadIndices.length) {
+        combinedLabels.push(lsChartData.labels[sampledLsIndices[i]])
+      }
+      combinedLsRates.push(lsDischargeRates[i])
+    } else {
+      combinedLsRates.push(null)
+    }
+  }
+
   const dischargeRateData = {
-    labels: sampledIndices.map(i => chartData.labels[i]),
+    labels: combinedLabels,
     datasets: [
       {
         label: 'Tasa Descarga WAD (% / min)',
-        data: dischargeRates,
+        data: combinedWadRates,
         borderColor: '#667eea',
         backgroundColor: 'rgba(102, 126, 234, 0.2)',
         borderWidth: 2,
@@ -196,7 +301,7 @@ function StatisticsPanel({ session, onNotesChange }) {
       },
       {
         label: 'Tasa Descarga LS (% / min)',
-        data: lsDischargeRates,
+        data: combinedLsRates,
         borderColor: '#f093fb',
         backgroundColor: 'rgba(240, 147, 251, 0.2)',
         borderWidth: 2,
@@ -208,13 +313,13 @@ function StatisticsPanel({ session, onNotesChange }) {
     ]
   }
 
-  // Intensity Impact Chart
+  // Intensity Impact Chart - SOLO DATOS VÁLIDOS DE LS
   const intensityImpactData = {
-    labels: sampledIndices.map(i => chartData.labels[i]),
+    labels: sampledLsIndices.map(i => lsChartData.labels[i]),
     datasets: [
       {
         label: 'Light Source Battery %',
-        data: sampledIndices.map(i => chartData.lightSourceBattery[i] >= 0 ? chartData.lightSourceBattery[i] : null),
+        data: sampledLsIndices.map(i => lsChartData.lightSourceBattery[i]),
         borderColor: '#f093fb',
         backgroundColor: 'rgba(240, 147, 251, 0.1)',
         borderWidth: 2,
@@ -225,10 +330,7 @@ function StatisticsPanel({ session, onNotesChange }) {
       },
       {
         label: 'Intensidad',
-        data: sampledIndices.map(i => {
-          const intensity = chartData.lightSourceIntensity[i]
-          return intensity >= 0 ? intensity * 20 : null
-        }),
+        data: sampledLsIndices.map(i => lsChartData.lightSourceIntensity[i] * 20),
         borderColor: '#feca57',
         backgroundColor: 'rgba(254, 202, 87, 0.1)',
         borderWidth: 2,
@@ -378,13 +480,13 @@ function StatisticsPanel({ session, onNotesChange }) {
     }
   }
 
-  // WAD Battery % vs Duration Estimate
+  // WAD Battery % vs Duration Estimate - SOLO DATOS VÁLIDOS DE WAD
   const wadBatteryVsEstimateData = {
-    labels: sampledIndices.map(i => chartData.labels[i]),
+    labels: sampledWadIndices.map(i => wadChartData.labels[i]),
     datasets: [
       {
         label: 'WAD Battery %',
-        data: sampledIndices.map(i => chartData.wadBattery[i]),
+        data: sampledWadIndices.map(i => wadChartData.wadBattery[i]),
         borderColor: '#667eea',
         backgroundColor: 'rgba(102, 126, 234, 0.1)',
         borderWidth: 2,
@@ -394,7 +496,7 @@ function StatisticsPanel({ session, onNotesChange }) {
       },
       {
         label: 'WAD Estimación (min)',
-        data: sampledIndices.map(i => chartData.wadDuration[i]),
+        data: sampledWadIndices.map(i => wadChartData.wadDuration[i]),
         borderColor: '#e74c3c',
         backgroundColor: 'rgba(231, 76, 60, 0.1)',
         borderWidth: 2,
@@ -427,13 +529,13 @@ function StatisticsPanel({ session, onNotesChange }) {
     }
   }
 
-  // LS Battery % vs Duration Estimate
+  // LS Battery % vs Duration Estimate - SOLO DATOS VÁLIDOS DE LS
   const lsBatteryVsEstimateData = {
-    labels: sampledIndices.map(i => chartData.labels[i]),
+    labels: sampledLsIndices.map(i => lsChartData.labels[i]),
     datasets: [
       {
         label: 'LS Battery %',
-        data: sampledIndices.map(i => chartData.lightSourceBattery[i]),
+        data: sampledLsIndices.map(i => lsChartData.lightSourceBattery[i]),
         borderColor: '#f093fb',
         backgroundColor: 'rgba(240, 147, 251, 0.1)',
         borderWidth: 2,
@@ -443,7 +545,7 @@ function StatisticsPanel({ session, onNotesChange }) {
       },
       {
         label: 'LS Estimación (min)',
-        data: sampledIndices.map(i => chartData.lightSourceDuration[i]),
+        data: sampledLsIndices.map(i => lsChartData.lightSourceDuration[i]),
         borderColor: '#48dbfb',
         backgroundColor: 'rgba(72, 219, 251, 0.1)',
         borderWidth: 2,
@@ -539,16 +641,16 @@ ${notes}
   const analysisCharts = [
     {
       id: 'wadAccuracy',
-      title: 'Precisión de Estimación WAD vs Realidad',
+      title: 'Precisión de Estimación WAD vs Duración Real',
       tooltip: 'Compara la duración estimada que mostraba el dispositivo WAD con el tiempo real que quedaba de cirugía. Una línea cercana indica estimaciones precisas. Haz clic en la leyenda para mostrar/ocultar el error de estimación.',
-      data: wadAccuracyData,
+      data: wadAccuracyChartData,
       options: chartOptions
     },
     {
       id: 'lsAccuracy',
-      title: 'Precisión de Estimación Light Source vs Realidad',
+      title: 'Precisión de Estimación Light Source vs Duración Real',
       tooltip: 'Compara la duración estimada de la fuente de luz con el tiempo real restante. Permite evaluar la fiabilidad del sistema de estimación. Haz clic en la leyenda para mostrar/ocultar el error de estimación.',
-      data: lsAccuracyData,
+      data: lsAccuracyChartData,
       options: chartOptions
     },
     {
