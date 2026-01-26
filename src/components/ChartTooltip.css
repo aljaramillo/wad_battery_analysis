@@ -38,7 +38,8 @@
   border-radius: 8px;
   font-size: 0.85rem;
   line-height: 1.5;
-  max-width: 300px;
+  max-width: 230px;
+  width: max-content;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   z-index: 1000;
   white-space: normal;

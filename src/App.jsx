@@ -12,7 +12,7 @@ function App() {
   const handleFilesLoaded = (newSessions) => {
     const sessionsWithNames = newSessions.map(session => ({
       ...session,
-      customName: session.summary.customName || session.customName || '',
+      customName: session.summary.customName || session.customName || session.id || '',
       notes: session.summary.notes || session.notes || ''
     }))
     setSessions(prev => [...prev, ...sessionsWithNames])

@@ -641,53 +641,53 @@ ${notes}
   // Construir títulos con serial y fecha
   const wadSerial = session.summary.wadSerialNumber || 'Unknown'
   const lsSerial = session.summary.lightSourceSerialNumber || 'Unknown'
-  const dateInfo = session.summary.surgeryDate ? ` (${session.summary.surgeryDate})` : ''
+  const dateInfo = session.summary.surgeryDate || ''
 
   const analysisCharts = [
     {
       id: 'wadAccuracy',
-      title: `Precisión de Estimación WAD vs Duración Real - ${wadSerial}`,
-      subtitle: dateInfo,
+      title: 'Precisión de Estimación WAD vs Duración Real',
+      deviceSerial: wadSerial,
       tooltip: 'Compara la duración estimada que mostraba el dispositivo WAD con el tiempo real que quedaba de cirugía. Una línea cercana indica estimaciones precisas. Haz clic en la leyenda para mostrar/ocultar el error de estimación.',
       data: wadAccuracyChartData,
       options: chartOptions
     },
     {
       id: 'lsAccuracy',
-      title: `Precisión de Estimación Light Source vs Duración Real - ${lsSerial}`,
-      subtitle: dateInfo,
+      title: 'Precisión de Estimación Light Source vs Duración Real',
+      deviceSerial: lsSerial,
       tooltip: 'Compara la duración estimada de la fuente de luz con el tiempo real restante. Permite evaluar la fiabilidad del sistema de estimación. Haz clic en la leyenda para mostrar/ocultar el error de estimación.',
       data: lsAccuracyChartData,
       options: chartOptions
     },
     {
       id: 'wadBatteryVsEstimate',
-      title: `WAD: Batería % vs Estimación de Duración - ${wadSerial}`,
-      subtitle: dateInfo,
+      title: 'WAD: Batería % vs Estimación de Duración',
+      deviceSerial: wadSerial,
       tooltip: 'Relaciona el porcentaje de batería restante del WAD con su estimación de minutos restantes. Permite evaluar la coherencia entre ambas métricas.',
       data: wadBatteryVsEstimateData,
       options: dualAxisOptions
     },
     {
       id: 'lsBatteryVsEstimate',
-      title: `Light Source: Batería % vs Estimación de Duración - ${lsSerial}`,
-      subtitle: dateInfo,
+      title: 'Light Source: Batería % vs Estimación de Duración',
+      deviceSerial: lsSerial,
       tooltip: 'Relaciona el porcentaje de batería del Light Source con su estimación de duración. Útil para identificar inconsistencias en las predicciones.',
       data: lsBatteryVsEstimateData,
       options: dualAxisOptions
     },
     {
       id: 'qualityImpact',
-      title: `Impacto de Calidad de Imagen en Batería WAD - ${wadSerial}`,
-      subtitle: dateInfo,
+      title: 'Impacto de Calidad de Imagen en Batería WAD',
+      deviceSerial: wadSerial,
       tooltip: 'Analiza cómo la calidad de video configurada (1080p, 2160p, etc.) afecta el consumo de batería del WAD durante la cirugía. Las líneas rojas verticales marcan cambios de calidad.',
       data: qualityImpactData,
       options: qualityOptions
     },
     {
       id: 'intensityImpact',
-      title: `Impacto de Intensidad de Luz en Batería LS - ${lsSerial}`,
-      subtitle: dateInfo,
+      title: 'Impacto de Intensidad de Luz en Batería LS',
+      deviceSerial: lsSerial,
       tooltip: 'Relaciona la intensidad de luz configurada con el consumo de batería del Light Source. Ayuda a entender cómo diferentes niveles de intensidad afectan la duración.',
       data: intensityImpactData,
       options: intensityOptions
@@ -695,19 +695,22 @@ ${notes}
     {
       id: 'dischargeRate',
       title: 'Verificación de Tasa de Descarga por Minuto',
-      subtitle: dateInfo,
+      deviceSerial: null, // No aplica serial aquí porque muestra ambos dispositivos
       tooltip: 'Muestra cuánto porcentaje de batería se consume por minuto en cada momento. Picos indican momentos de alto consumo. Útil para verificar patrones de descarga.',
       data: dischargeRateData,
       options: chartOptions
     }
   ]
 
-  const sessionTitle = session.customName || session.summary.surgeryDate
+  // Nombre de sesión: customName si existe, sino el ID del archivo
+  const sessionName = session.customName || session.id
+  const sessionTitle = sessionName || session.summary.surgeryDate
 
   return (
     <div className="statistics-panel">
       <h2>Análisis Estadístico Completo: {sessionTitle}</h2>
-      {session.customName && <p className="session-subtitle">{session.summary.surgeryDate} · {session.summary.duration} min</p>}
+      {session.customName && <p className="session-subtitle">{session.id} · {session.summary.surgeryDate} · {session.summary.duration} min</p>}
+      {!session.customName && <p className="session-subtitle">{session.summary.surgeryDate} · {session.summary.duration} min</p>}
 
       <div className="stats-table-container">
         <table className="stats-table">
@@ -791,11 +794,20 @@ ${notes}
           <div key={chart.id} className="chart-card">
             <div className="chart-header">
               <div className="chart-title-group">
-                <h3>
-                  {chart.title}
-                  {chart.subtitle && <span style={{ fontSize: '0.85em', fontWeight: 'normal' }}> {chart.subtitle}</span>}
-                </h3>
-                <ChartTooltip text={chart.tooltip} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <h3 style={{ margin: 0 }}>{chart.title}</h3>
+                  <ChartTooltip text={chart.tooltip} />
+                </div>
+                {chart.deviceSerial && (
+                  <div style={{ fontSize: '0.75em', fontWeight: 'normal', color: '#666' }}>
+                    {sessionName} - {chart.deviceSerial} ({dateInfo})
+                  </div>
+                )}
+                {!chart.deviceSerial && dateInfo && (
+                  <div style={{ fontSize: '0.75em', fontWeight: 'normal', color: '#666' }}>
+                    {sessionName} ({dateInfo})
+                  </div>
+                )}
               </div>
             </div>
             <div className="chart-container">
