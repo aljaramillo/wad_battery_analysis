@@ -638,52 +638,64 @@ ${notes}
     }
   }
 
+  // Construir títulos con serial y fecha
+  const wadSerial = session.summary.wadSerialNumber || 'Unknown'
+  const lsSerial = session.summary.lightSourceSerialNumber || 'Unknown'
+  const dateInfo = session.summary.surgeryDate ? ` (${session.summary.surgeryDate})` : ''
+
   const analysisCharts = [
     {
       id: 'wadAccuracy',
-      title: 'Precisión de Estimación WAD vs Duración Real',
+      title: `Precisión de Estimación WAD vs Duración Real - ${wadSerial}`,
+      subtitle: dateInfo,
       tooltip: 'Compara la duración estimada que mostraba el dispositivo WAD con el tiempo real que quedaba de cirugía. Una línea cercana indica estimaciones precisas. Haz clic en la leyenda para mostrar/ocultar el error de estimación.',
       data: wadAccuracyChartData,
       options: chartOptions
     },
     {
       id: 'lsAccuracy',
-      title: 'Precisión de Estimación Light Source vs Duración Real',
+      title: `Precisión de Estimación Light Source vs Duración Real - ${lsSerial}`,
+      subtitle: dateInfo,
       tooltip: 'Compara la duración estimada de la fuente de luz con el tiempo real restante. Permite evaluar la fiabilidad del sistema de estimación. Haz clic en la leyenda para mostrar/ocultar el error de estimación.',
       data: lsAccuracyChartData,
       options: chartOptions
     },
     {
       id: 'wadBatteryVsEstimate',
-      title: 'WAD: Batería % vs Estimación de Duración',
+      title: `WAD: Batería % vs Estimación de Duración - ${wadSerial}`,
+      subtitle: dateInfo,
       tooltip: 'Relaciona el porcentaje de batería restante del WAD con su estimación de minutos restantes. Permite evaluar la coherencia entre ambas métricas.',
       data: wadBatteryVsEstimateData,
       options: dualAxisOptions
     },
     {
       id: 'lsBatteryVsEstimate',
-      title: 'Light Source: Batería % vs Estimación de Duración',
+      title: `Light Source: Batería % vs Estimación de Duración - ${lsSerial}`,
+      subtitle: dateInfo,
       tooltip: 'Relaciona el porcentaje de batería del Light Source con su estimación de duración. Útil para identificar inconsistencias en las predicciones.',
       data: lsBatteryVsEstimateData,
       options: dualAxisOptions
     },
     {
-      id: 'intensityImpact',
-      title: 'Impacto de Intensidad de Luz en Batería LS',
-      tooltip: 'Relaciona la intensidad de luz configurada con el consumo de batería del Light Source. Ayuda a entender cómo diferentes niveles de intensidad afectan la duración.',
-      data: intensityImpactData,
-      options: intensityOptions
-    },
-    {
       id: 'qualityImpact',
-      title: 'Impacto de Calidad de Imagen en Batería WAD',
+      title: `Impacto de Calidad de Imagen en Batería WAD - ${wadSerial}`,
+      subtitle: dateInfo,
       tooltip: 'Analiza cómo la calidad de video configurada (1080p, 2160p, etc.) afecta el consumo de batería del WAD durante la cirugía. Las líneas rojas verticales marcan cambios de calidad.',
       data: qualityImpactData,
       options: qualityOptions
     },
     {
+      id: 'intensityImpact',
+      title: `Impacto de Intensidad de Luz en Batería LS - ${lsSerial}`,
+      subtitle: dateInfo,
+      tooltip: 'Relaciona la intensidad de luz configurada con el consumo de batería del Light Source. Ayuda a entender cómo diferentes niveles de intensidad afectan la duración.',
+      data: intensityImpactData,
+      options: intensityOptions
+    },
+    {
       id: 'dischargeRate',
       title: 'Verificación de Tasa de Descarga por Minuto',
+      subtitle: dateInfo,
       tooltip: 'Muestra cuánto porcentaje de batería se consume por minuto en cada momento. Picos indican momentos de alto consumo. Útil para verificar patrones de descarga.',
       data: dischargeRateData,
       options: chartOptions
@@ -779,7 +791,10 @@ ${notes}
           <div key={chart.id} className="chart-card">
             <div className="chart-header">
               <div className="chart-title-group">
-                <h3>{chart.title} · {sessionTitle}</h3>
+                <h3>
+                  {chart.title}
+                  {chart.subtitle && <span style={{ fontSize: '0.85em', fontWeight: 'normal' }}> {chart.subtitle}</span>}
+                </h3>
                 <ChartTooltip text={chart.tooltip} />
               </div>
             </div>
