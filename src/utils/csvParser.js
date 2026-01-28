@@ -126,6 +126,10 @@ export const parseSummaryText = (text) => {
       summary.wadSerialNumber = line.split(':')[1].trim()
     } else if (line.includes('Light Source Serial:')) {
       summary.lightSourceSerialNumber = line.split(':')[1].trim()
+    } else if (line.includes('WAD Firmware:')) {
+      summary.wadFirmware = line.split(':')[1].trim()
+    } else if (line.includes('Light Source Firmware:')) {
+      summary.lightSourceFirmware = line.split(':')[1].trim()
     } else if (line.includes('Start Time:')) {
       summary.startTime = line.split('Time:')[1].trim()
     } else if (line.includes('End Time:')) {

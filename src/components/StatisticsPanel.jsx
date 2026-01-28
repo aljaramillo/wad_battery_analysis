@@ -646,9 +646,11 @@ ${notes}
     }
   }
 
-  // Construir títulos con serial y fecha
+  // Construir títulos con serial, firmware y fecha
   const wadSerial = session.summary.wadSerialNumber || 'Unknown'
   const lsSerial = session.summary.lightSourceSerialNumber || 'Unknown'
+  const wadFirmware = session.summary.wadFirmware || null
+  const lsFirmware = session.summary.lightSourceFirmware || null
   const dateInfo = session.summary.surgeryDate || ''
 
   // ========== PREPARAR DATOS PARA MÉTRICAS TÉCNICAS ADB ==========
@@ -873,6 +875,7 @@ ${notes}
       id: 'wadAccuracy',
       title: 'Precisión de Estimación WAD vs Duración Real',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Compara la duración estimada que mostraba el dispositivo WAD con el tiempo real que quedaba de cirugía. Una línea cercana indica estimaciones precisas. Haz clic en la leyenda para mostrar/ocultar el error de estimación.',
       data: wadAccuracyChartData,
       options: chartOptions
@@ -881,6 +884,7 @@ ${notes}
       id: 'lsAccuracy',
       title: 'Precisión de Estimación Light Source vs Duración Real',
       deviceSerial: lsSerial,
+      firmware: lsFirmware,
       tooltip: 'Compara la duración estimada de la fuente de luz con el tiempo real restante. Permite evaluar la fiabilidad del sistema de estimación. Haz clic en la leyenda para mostrar/ocultar el error de estimación.',
       data: lsAccuracyChartData,
       options: chartOptions
@@ -889,6 +893,7 @@ ${notes}
       id: 'wadBatteryVsEstimate',
       title: 'WAD: Batería % vs Estimación de Duración',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Relaciona el porcentaje de batería restante del WAD con su estimación de minutos restantes. Permite evaluar la coherencia entre ambas métricas.',
       data: wadBatteryVsEstimateData,
       options: dualAxisOptions
@@ -897,6 +902,7 @@ ${notes}
       id: 'lsBatteryVsEstimate',
       title: 'Light Source: Batería % vs Estimación de Duración',
       deviceSerial: lsSerial,
+      firmware: lsFirmware,
       tooltip: 'Relaciona el porcentaje de batería del Light Source con su estimación de duración. Útil para identificar inconsistencias en las predicciones.',
       data: lsBatteryVsEstimateData,
       options: dualAxisOptions
@@ -905,6 +911,7 @@ ${notes}
       id: 'qualityImpact',
       title: 'Impacto de Calidad de Imagen en Batería WAD',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Analiza cómo la calidad de video configurada (1080p, 2160p, etc.) afecta el consumo de batería del WAD durante la cirugía. Las líneas rojas verticales marcan cambios de calidad.',
       data: qualityImpactData,
       options: qualityOptions
@@ -913,6 +920,7 @@ ${notes}
       id: 'intensityImpact',
       title: 'Impacto de Intensidad de Luz en Batería LS',
       deviceSerial: lsSerial,
+      firmware: lsFirmware,
       tooltip: 'Relaciona la intensidad de luz configurada con el consumo de batería del Light Source. Ayuda a entender cómo diferentes niveles de intensidad afectan la duración.',
       data: intensityImpactData,
       options: intensityOptions
@@ -921,6 +929,7 @@ ${notes}
       id: 'dischargeRate',
       title: 'Verificación de Tasa de Descarga por Minuto',
       deviceSerial: null, // No aplica serial aquí porque muestra ambos dispositivos
+      firmware: null,
       tooltip: 'Muestra cuánto porcentaje de batería se consume por minuto en cada momento. Picos indican momentos de alto consumo. Útil para verificar patrones de descarga.',
       data: dischargeRateData,
       options: chartOptions
@@ -933,6 +942,7 @@ ${notes}
       id: 'tempVsUsage',
       title: 'Evolución de Temperatura vs Uso',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Relaciona la temperatura de la batería WAD (°C) con su nivel de carga (%) durante la cirugía. Permite identificar sobrecalentamiento durante uso intensivo y su correlación con la descarga.',
       data: tempVsUsageChartData,
       options: {
@@ -948,6 +958,7 @@ ${notes}
       id: 'currentConsumption',
       title: 'Consumo de Corriente en Tiempo Real',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Muestra el consumo de corriente (mA) del WAD a lo largo del tiempo. Picos indican momentos de alto consumo energético, posiblemente relacionados con cambios en la calidad de video o intensidad de uso.',
       data: currentChartData,
       options: {
@@ -962,6 +973,7 @@ ${notes}
       id: 'voltageDegradation',
       title: 'Degradación de Voltaje',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Gráfica de dispersión que muestra cómo el voltaje de la batería (V) cae a medida que se descarga (%). Una caída uniforme indica comportamiento saludable; caídas bruscas pueden indicar problemas o "muerte súbita" de la batería.',
       data: voltageChartData,
       options: {
@@ -976,6 +988,7 @@ ${notes}
       id: 'powerConsumption',
       title: 'Eficiencia Energética (Potencia Instantánea)',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Calcula la potencia real consumida (mW) = Voltaje × Corriente a lo largo del tiempo. Permite comparar la eficiencia energética entre diferentes momentos de la cirugía o entre sesiones.',
       data: powerChartData,
       options: {
@@ -990,6 +1003,7 @@ ${notes}
       id: 'tempCurrentCorrelation',
       title: 'Correlación Temperatura-Corriente',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Gráfica de dispersión que relaciona el consumo de corriente (mA) con la temperatura de la batería (°C). El color indica el progreso temporal (azul=inicio, rojo=final). Permite verificar si alta corriente causa aumento de temperatura.',
       data: tempCurrentChartData,
       options: {
@@ -1004,6 +1018,7 @@ ${notes}
       id: 'capacityComparison',
       title: 'Capacidad Real vs Nominal',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Compara el porcentaje de batería que reporta el sistema WAD con la capacidad real medida por ADB. Desviaciones significativas pueden indicar problemas de calibración o degradación de la batería.',
       data: capacityChartData,
       options: {
@@ -1018,6 +1033,7 @@ ${notes}
       id: 'batteryHealth',
       title: 'Estado de Salud de la Batería',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Muestra cambios en el estado de salud reportado por ADB (Good, Fair, Poor) durante la cirugía. Alertas sobre deterioro del estado pueden indicar problemas críticos de hardware.',
       data: healthChartData,
       options: {
@@ -1041,6 +1057,7 @@ ${notes}
       id: 'temperatureHeatmap',
       title: 'Mapa de Calor: Temperatura durante Duración',
       deviceSerial: wadSerial,
+      firmware: wadFirmware,
       tooltip: 'Visualiza la distribución de temperatura (°C) a lo largo del tiempo de uso (min). La densidad de puntos indica rangos de temperatura más frecuentes según la duración de la sesión.',
       data: heatmapChartData,
       options: {
@@ -1151,7 +1168,9 @@ ${notes}
                 </div>
                 {chart.deviceSerial && (
                   <div style={{ fontSize: '0.75em', fontWeight: 'normal', color: '#666' }}>
-                    {sessionName} - {chart.deviceSerial} ({dateInfo})
+                    {sessionName} - {chart.deviceSerial}
+                    {chart.firmware && ` [FW: ${chart.firmware}]`}
+                    {` (${dateInfo})`}
                   </div>
                 )}
                 {!chart.deviceSerial && dateInfo && (
@@ -1201,7 +1220,9 @@ ${notes}
                 </div>
                 {chart.deviceSerial && (
                   <div style={{ fontSize: '0.75em', fontWeight: 'normal', color: '#666' }}>
-                    {sessionName} - {chart.deviceSerial} ({dateInfo})
+                    {sessionName} - {chart.deviceSerial}
+                    {chart.firmware && ` [FW: ${chart.firmware}]`}
+                    {` (${dateInfo})`}
                   </div>
                 )}
               </div>
