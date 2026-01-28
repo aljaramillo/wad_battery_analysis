@@ -1,4 +1,4 @@
-import { Line } from 'react-chartjs-2'
+import { Line, Scatter } from 'react-chartjs-2'
 import { Chart as ChartJS } from 'chart.js'
 import annotationPlugin from 'chartjs-plugin-annotation'
 import { 
@@ -8,7 +8,15 @@ import {
   processChartData,
   getWADValidData,
   getLSValidData,
-  getDeviceTimeline
+  getDeviceTimeline,
+  analyzeTemperatureVsUsage,
+  analyzeCurrentConsumption,
+  analyzeVoltageDegradation,
+  analyzePowerConsumption,
+  analyzeTemperatureCurrentCorrelation,
+  analyzeCapacityComparison,
+  analyzeBatteryHealth,
+  analyzeTemperatureHeatmap
 } from '../utils/dataProcessor'
 import ChartTooltip from './ChartTooltip'
 import './StatisticsPanel.css'
@@ -643,6 +651,223 @@ ${notes}
   const lsSerial = session.summary.lightSourceSerialNumber || 'Unknown'
   const dateInfo = session.summary.surgeryDate || ''
 
+  // ========== PREPARAR DATOS PARA MÉTRICAS TÉCNICAS ADB ==========
+  
+  // 1. Evolución de Temperatura vs Uso
+  const tempVsUsageData = analyzeTemperatureVsUsage(session.data)
+  const tempVsUsageChartData = {
+    labels: tempVsUsageData.map(d => d.time),
+    datasets: [
+      {
+        label: 'Temperatura (°C)',
+        data: tempVsUsageData.map(d => d.temperature),
+        borderColor: '#ff6384',
+        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+        yAxisID: 'y',
+        tension: 0.4
+      },
+      {
+        label: 'Batería (%)',
+        data: tempVsUsageData.map(d => d.battery),
+        borderColor: '#36a2eb',
+        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+        yAxisID: 'y1',
+        tension: 0.4
+      }
+    ]
+  }
+
+  // 2. Consumo de Corriente en Tiempo Real
+  const currentData = analyzeCurrentConsumption(session.data)
+  const currentChartData = {
+    labels: currentData.map(d => d.time),
+    datasets: [
+      {
+        label: 'Corriente (mA)',
+        data: currentData.map(d => d.current),
+        borderColor: '#4bc0c0',
+        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+        tension: 0.4
+      }
+    ]
+  }
+
+  // 3. Degradación de Voltaje
+  const voltageData = analyzeVoltageDegradation(session.data)
+  const voltageChartData = {
+    labels: voltageData.map((d, idx) => idx), // Usar índice para X
+    datasets: [
+      {
+        type: 'scatter',
+        label: 'Voltaje (V)',
+        data: voltageData.map(d => ({ x: d.battery, y: d.voltage })),
+        backgroundColor: '#9966ff',
+        borderColor: '#9966ff',
+        pointRadius: 2
+      }
+    ]
+  }
+
+  // 4. Eficiencia Energética (Potencia)
+  const powerData = analyzePowerConsumption(session.data)
+  const powerChartData = {
+    labels: powerData.map(d => d.time),
+    datasets: [
+      {
+        label: 'Potencia (mW)',
+        data: powerData.map(d => d.power),
+        borderColor: '#ff9f40',
+        backgroundColor: 'rgba(255, 159, 64, 0.1)',
+        tension: 0.4
+      }
+    ]
+  }
+
+  // 5. Correlación Temperatura-Corriente
+  const tempCurrentData = analyzeTemperatureCurrentCorrelation(session.data)
+  const tempCurrentChartData = {
+    datasets: [
+      {
+        type: 'scatter',
+        label: 'Puntos de Medición',
+        data: tempCurrentData.map(d => ({ x: d.current, y: d.temperature })),
+        backgroundColor: tempCurrentData.map(d => {
+          // Gradiente de color según progreso (azul -> rojo)
+          const progress = d.progress / 100
+          const r = Math.floor(54 + progress * (255 - 54))
+          const g = Math.floor(162 - progress * 162)
+          const b = Math.floor(235 - progress * 235)
+          return `rgba(${r}, ${g}, ${b}, 0.6)`
+        }),
+        pointRadius: 4
+      }
+    ]
+  }
+
+  // 6. Capacidad Real vs Nominal
+  const capacityData = analyzeCapacityComparison(session.data)
+  const capacityChartData = {
+    labels: capacityData.map(d => d.time),
+    datasets: [
+      {
+        label: 'Batería Reportada (%)',
+        data: capacityData.map(d => d.reportedBattery),
+        borderColor: '#36a2eb',
+        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+        tension: 0.4
+      },
+      {
+        label: 'Capacidad ADB (%)',
+        data: capacityData.map(d => d.adbCapacity),
+        borderColor: '#ff6384',
+        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+        tension: 0.4,
+        borderDash: [5, 5]
+      }
+    ]
+  }
+
+  // 7. Estado de Salud de la Batería
+  const healthData = analyzeBatteryHealth(session.data)
+  const healthChartData = {
+    labels: healthData.timeline.map(d => d.time),
+    datasets: [
+      {
+        label: 'Estado de Salud',
+        data: healthData.timeline.map(d => d.health === 'Good' ? 100 : d.health === 'Unknown' ? 50 : 0),
+        borderColor: '#4bc0c0',
+        backgroundColor: healthData.timeline.map(d => 
+          d.health === 'Good' ? 'rgba(75, 192, 192, 0.1)' : 'rgba(255, 99, 132, 0.1)'
+        ),
+        stepped: true,
+        fill: true
+      }
+    ]
+  }
+
+  // 8. Mapa de Calor: Temperatura durante Duración
+  const heatmapData = analyzeTemperatureHeatmap(session.data)
+  // Para el mapa de calor, usaremos un scatter chart con tamaño de punto proporcional
+  const heatmapChartData = {
+    datasets: [
+      {
+        type: 'scatter',
+        label: 'Densidad de Temperatura',
+        data: heatmapData.rawData.map(d => ({ x: d.duration, y: d.temperature })),
+        backgroundColor: 'rgba(255, 99, 132, 0.6)',
+        pointRadius: 3
+      }
+    ]
+  }
+
+  // Opciones comunes para gráficas ADB
+  const adbDualAxisOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    scales: {
+      x: {
+        title: { display: true, text: 'Tiempo de Cirugía' },
+        ticks: { maxTicksLimit: 10 }
+      },
+      y: {
+        type: 'linear',
+        display: true,
+        position: 'left',
+        title: { display: true }
+      },
+      y1: {
+        type: 'linear',
+        display: true,
+        position: 'right',
+        title: { display: true },
+        grid: { drawOnChartArea: false }
+      }
+    },
+    plugins: {
+      legend: { display: true, position: 'top' },
+      tooltip: { mode: 'index', intersect: false }
+    }
+  }
+
+  const adbSingleAxisOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    scales: {
+      x: {
+        title: { display: true, text: 'Tiempo de Cirugía' },
+        ticks: { maxTicksLimit: 10 }
+      },
+      y: {
+        title: { display: true }
+      }
+    },
+    plugins: {
+      legend: { display: true, position: 'top' },
+      tooltip: { mode: 'index', intersect: false }
+    }
+  }
+
+  const adbScatterOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true } },
+      y: { title: { display: true } }
+    },
+    plugins: {
+      legend: { display: true, position: 'top' },
+      tooltip: { mode: 'point' }
+    }
+  }
+
   const analysisCharts = [
     {
       id: 'wadAccuracy',
@@ -699,6 +924,132 @@ ${notes}
       tooltip: 'Muestra cuánto porcentaje de batería se consume por minuto en cada momento. Picos indican momentos de alto consumo. Útil para verificar patrones de descarga.',
       data: dischargeRateData,
       options: chartOptions
+    }
+  ]
+
+  // Array de gráficas de Métricas Técnicas ADB
+  const adbMetricsCharts = [
+    {
+      id: 'tempVsUsage',
+      title: 'Evolución de Temperatura vs Uso',
+      deviceSerial: wadSerial,
+      tooltip: 'Relaciona la temperatura de la batería WAD (°C) con su nivel de carga (%) durante la cirugía. Permite identificar sobrecalentamiento durante uso intensivo y su correlación con la descarga.',
+      data: tempVsUsageChartData,
+      options: {
+        ...adbDualAxisOptions,
+        scales: {
+          ...adbDualAxisOptions.scales,
+          y: { ...adbDualAxisOptions.scales.y, title: { display: true, text: 'Temperatura (°C)' } },
+          y1: { ...adbDualAxisOptions.scales.y1, title: { display: true, text: 'Batería (%)' } }
+        }
+      }
+    },
+    {
+      id: 'currentConsumption',
+      title: 'Consumo de Corriente en Tiempo Real',
+      deviceSerial: wadSerial,
+      tooltip: 'Muestra el consumo de corriente (mA) del WAD a lo largo del tiempo. Picos indican momentos de alto consumo energético, posiblemente relacionados con cambios en la calidad de video o intensidad de uso.',
+      data: currentChartData,
+      options: {
+        ...adbSingleAxisOptions,
+        scales: {
+          ...adbSingleAxisOptions.scales,
+          y: { title: { display: true, text: 'Corriente (mA)' } }
+        }
+      }
+    },
+    {
+      id: 'voltageDegradation',
+      title: 'Degradación de Voltaje',
+      deviceSerial: wadSerial,
+      tooltip: 'Gráfica de dispersión que muestra cómo el voltaje de la batería (V) cae a medida que se descarga (%). Una caída uniforme indica comportamiento saludable; caídas bruscas pueden indicar problemas o "muerte súbita" de la batería.',
+      data: voltageChartData,
+      options: {
+        ...adbScatterOptions,
+        scales: {
+          x: { title: { display: true, text: 'Batería (%)' } },
+          y: { title: { display: true, text: 'Voltaje (V)' } }
+        }
+      }
+    },
+    {
+      id: 'powerConsumption',
+      title: 'Eficiencia Energética (Potencia Instantánea)',
+      deviceSerial: wadSerial,
+      tooltip: 'Calcula la potencia real consumida (mW) = Voltaje × Corriente a lo largo del tiempo. Permite comparar la eficiencia energética entre diferentes momentos de la cirugía o entre sesiones.',
+      data: powerChartData,
+      options: {
+        ...adbSingleAxisOptions,
+        scales: {
+          ...adbSingleAxisOptions.scales,
+          y: { title: { display: true, text: 'Potencia (mW)' } }
+        }
+      }
+    },
+    {
+      id: 'tempCurrentCorrelation',
+      title: 'Correlación Temperatura-Corriente',
+      deviceSerial: wadSerial,
+      tooltip: 'Gráfica de dispersión que relaciona el consumo de corriente (mA) con la temperatura de la batería (°C). El color indica el progreso temporal (azul=inicio, rojo=final). Permite verificar si alta corriente causa aumento de temperatura.',
+      data: tempCurrentChartData,
+      options: {
+        ...adbScatterOptions,
+        scales: {
+          x: { title: { display: true, text: 'Corriente (mA)' } },
+          y: { title: { display: true, text: 'Temperatura (°C)' } }
+        }
+      }
+    },
+    {
+      id: 'capacityComparison',
+      title: 'Capacidad Real vs Nominal',
+      deviceSerial: wadSerial,
+      tooltip: 'Compara el porcentaje de batería que reporta el sistema WAD con la capacidad real medida por ADB. Desviaciones significativas pueden indicar problemas de calibración o degradación de la batería.',
+      data: capacityChartData,
+      options: {
+        ...adbSingleAxisOptions,
+        scales: {
+          ...adbSingleAxisOptions.scales,
+          y: { title: { display: true, text: 'Capacidad (%)' } }
+        }
+      }
+    },
+    {
+      id: 'batteryHealth',
+      title: 'Estado de Salud de la Batería',
+      deviceSerial: wadSerial,
+      tooltip: 'Muestra cambios en el estado de salud reportado por ADB (Good, Fair, Poor) durante la cirugía. Alertas sobre deterioro del estado pueden indicar problemas críticos de hardware.',
+      data: healthChartData,
+      options: {
+        ...adbSingleAxisOptions,
+        scales: {
+          ...adbSingleAxisOptions.scales,
+          y: { 
+            title: { display: true, text: 'Estado' },
+            ticks: {
+              callback: (value) => {
+                if (value === 100) return 'Good'
+                if (value === 50) return 'Unknown'
+                return 'Bad'
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      id: 'temperatureHeatmap',
+      title: 'Mapa de Calor: Temperatura durante Duración',
+      deviceSerial: wadSerial,
+      tooltip: 'Visualiza la distribución de temperatura (°C) a lo largo del tiempo de uso (min). La densidad de puntos indica rangos de temperatura más frecuentes según la duración de la sesión.',
+      data: heatmapChartData,
+      options: {
+        ...adbScatterOptions,
+        scales: {
+          x: { title: { display: true, text: 'Tiempo Transcurrido (min)' } },
+          y: { title: { display: true, text: 'Temperatura (°C)' } }
+        }
+      }
     }
   ]
 
@@ -836,6 +1187,34 @@ ${notes}
             </button>
           </div>
         </div>
+      </div>
+
+      <h3 className="section-title">⚡ Métricas Técnicas ADB del WAD</h3>
+      <div className="charts-grid">
+        {adbMetricsCharts.map(chart => (
+          <div key={chart.id} className="chart-card">
+            <div className="chart-header">
+              <div className="chart-title-group">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <h3 style={{ margin: 0 }}>{chart.title}</h3>
+                  <ChartTooltip text={chart.tooltip} />
+                </div>
+                {chart.deviceSerial && (
+                  <div style={{ fontSize: '0.75em', fontWeight: 'normal', color: '#666' }}>
+                    {sessionName} - {chart.deviceSerial} ({dateInfo})
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="chart-container">
+              {chart.id === 'voltageDegradation' || chart.id === 'tempCurrentCorrelation' || chart.id === 'temperatureHeatmap' ? (
+                <Scatter data={chart.data} options={chart.options} />
+              ) : (
+                <Line data={chart.data} options={chart.options} />
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

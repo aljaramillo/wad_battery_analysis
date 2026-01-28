@@ -4,19 +4,110 @@ export const parseCSV = (file) => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
-      dynamicTyping: true,
+      dynamicTyping: false, // Desactivar para manejar "--" manualmente
       skipEmptyLines: true,
       complete: (results) => {
         if (results.errors.length > 0) {
           reject(results.errors)
         } else {
-          resolve(results.data)
+          // Procesar datos: convertir tipos y manejar "--"
+          const processedData = processADBData(results.data)
+          resolve(processedData)
         }
       },
       error: (error) => {
         reject(error)
       }
     })
+  })
+}
+
+/**
+ * Procesa los datos ADB del WAD:
+ * - Convierte tipos numéricos
+ * - Reemplaza "--" con el valor anterior (carry-forward)
+ * - Maneja valores especiales (-1 para apagado)
+ */
+const processADBData = (rawData) => {
+  // Campos que deben ser numéricos
+  const numericFields = [
+    'WAD Battery %',
+    'WAD Duration (min)',
+    'Light Source %',
+    'Light Source Duration (min)',
+    'Light Source Intensity'
+  ]
+  
+  // Campos ADB que pueden ser "--" y necesitan carry-forward
+  const adbNumericFields = [
+    'WAD ADB Capacity',
+    'WAD ADB Current (uA)',
+    'WAD ADB Voltage (uV)',
+    'WAD ADB Temp (0.1°C)'
+  ]
+  
+  // Campos de texto ADB
+  const adbTextFields = ['WAD ADB Health', 'WAD ADB Status']
+  
+  // Valores anteriores para carry-forward
+  const lastValidValues = {}
+  
+  return rawData.map((row, index) => {
+    const processed = { ...row }
+    
+    // Convertir campos numéricos estándar
+    numericFields.forEach(field => {
+      if (row[field] === null || row[field] === undefined || row[field] === '') {
+        processed[field] = -1
+      } else {
+        const value = parseFloat(row[field])
+        processed[field] = isNaN(value) ? -1 : value
+      }
+    })
+    
+    // Procesar campos ADB numéricos con carry-forward
+    adbNumericFields.forEach(field => {
+      const rawValue = row[field]
+      
+      if (rawValue === '--' || rawValue === '' || rawValue === null || rawValue === undefined) {
+        // Si es "--" o vacío, usar el valor anterior
+        if (lastValidValues[field] !== undefined) {
+          processed[field] = lastValidValues[field]
+        } else {
+          // Si no hay valor anterior, usar -1
+          processed[field] = -1
+        }
+      } else {
+        // Intentar convertir a número
+        const value = parseFloat(rawValue)
+        if (!isNaN(value)) {
+          processed[field] = value
+          lastValidValues[field] = value // Guardar como último válido
+        } else {
+          // Si no es número, usar último valor o -1
+          processed[field] = lastValidValues[field] !== undefined ? lastValidValues[field] : -1
+        }
+      }
+    })
+    
+    // Procesar campos ADB de texto con carry-forward
+    adbTextFields.forEach(field => {
+      const rawValue = row[field]
+      
+      if (rawValue === '--' || rawValue === '' || rawValue === null || rawValue === undefined) {
+        // Si es "--", usar el valor anterior
+        if (lastValidValues[field] !== undefined) {
+          processed[field] = lastValidValues[field]
+        } else {
+          processed[field] = 'Unknown'
+        }
+      } else {
+        processed[field] = rawValue
+        lastValidValues[field] = rawValue
+      }
+    })
+    
+    return processed
   })
 }
 

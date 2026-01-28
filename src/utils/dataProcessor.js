@@ -218,3 +218,218 @@ export const getColorForSession = (index) => {
   ]
   return colors[index % colors.length]
 }
+
+// ========== ANÁLISIS DE MÉTRICAS TÉCNICAS ADB ==========
+
+/**
+ * 1. Evolución de Temperatura vs Uso del WAD
+ * Retorna temperatura (°C) y batería (%) a lo largo del tiempo
+ */
+export const analyzeTemperatureVsUsage = (data) => {
+  const wadValidData = getWADValidData(data)
+  
+  return wadValidData
+    .filter(row => row['WAD ADB Temp (0.1°C)'] !== -1 && row['WAD Battery %'] !== -1)
+    .map(row => ({
+      time: row['Surgery Time'],
+      temperature: row['WAD ADB Temp (0.1°C)'] / 10, // Convertir de 0.1°C a °C
+      battery: row['WAD Battery %']
+    }))
+}
+
+/**
+ * 2. Consumo de Corriente en Tiempo Real del WAD
+ * Retorna corriente (mA) y calidad de imagen a lo largo del tiempo
+ */
+export const analyzeCurrentConsumption = (data) => {
+  const wadValidData = getWADValidData(data)
+  
+  return wadValidData
+    .filter(row => row['WAD ADB Current (uA)'] !== -1)
+    .map(row => ({
+      time: row['Surgery Time'],
+      current: Math.abs(row['WAD ADB Current (uA)']) / 1000, // Convertir de μA a mA (valor absoluto)
+      quality: row['WAD Quality']
+    }))
+}
+
+/**
+ * 3. Degradación de Voltaje del WAD
+ * Retorna voltaje (V) vs batería (%)
+ */
+export const analyzeVoltageDegradation = (data) => {
+  const wadValidData = getWADValidData(data)
+  
+  return wadValidData
+    .filter(row => 
+      row['WAD ADB Voltage (uV)'] !== -1 && 
+      row['WAD Battery %'] !== -1
+    )
+    .map(row => ({
+      battery: row['WAD Battery %'],
+      voltage: row['WAD ADB Voltage (uV)'] / 1000000, // Convertir de μV a V
+      time: row['Surgery Time']
+    }))
+    .sort((a, b) => b.battery - a.battery) // Ordenar de 100% a 0%
+}
+
+/**
+ * 4. Eficiencia Energética (Potencia Instantánea) del WAD
+ * Retorna potencia (mW) = Voltaje × Corriente a lo largo del tiempo
+ */
+export const analyzePowerConsumption = (data) => {
+  const wadValidData = getWADValidData(data)
+  
+  return wadValidData
+    .filter(row => 
+      row['WAD ADB Voltage (uV)'] !== -1 && 
+      row['WAD ADB Current (uA)'] !== -1
+    )
+    .map(row => {
+      const voltageV = row['WAD ADB Voltage (uV)'] / 1000000 // μV a V
+      const currentA = Math.abs(row['WAD ADB Current (uA)']) / 1000000 // μA a A
+      const powerW = voltageV * currentA // Watts
+      
+      return {
+        time: row['Surgery Time'],
+        power: powerW * 1000 // Convertir a mW para mejor legibilidad
+      }
+    })
+}
+
+/**
+ * 5. Correlación Temperatura-Corriente del WAD
+ * Retorna puntos de dispersión: corriente (mA) vs temperatura (°C)
+ */
+export const analyzeTemperatureCurrentCorrelation = (data) => {
+  const wadValidData = getWADValidData(data)
+  
+  return wadValidData
+    .filter(row => 
+      row['WAD ADB Temp (0.1°C)'] !== -1 && 
+      row['WAD ADB Current (uA)'] !== -1
+    )
+    .map((row, index) => ({
+      current: Math.abs(row['WAD ADB Current (uA)']) / 1000, // μA a mA
+      temperature: row['WAD ADB Temp (0.1°C)'] / 10, // 0.1°C a °C
+      time: row['Surgery Time'],
+      progress: (index / wadValidData.length) * 100 // % de progreso para gradiente de color
+    }))
+}
+
+/**
+ * 6. Capacidad Real vs Nominal del WAD
+ * Retorna batería reportada (%) vs capacidad ADB (%) a lo largo del tiempo
+ */
+export const analyzeCapacityComparison = (data) => {
+  const wadValidData = getWADValidData(data)
+  
+  return wadValidData
+    .filter(row => 
+      row['WAD Battery %'] !== -1 && 
+      row['WAD ADB Capacity'] !== -1
+    )
+    .map(row => ({
+      time: row['Surgery Time'],
+      reportedBattery: row['WAD Battery %'],
+      adbCapacity: row['WAD ADB Capacity']
+    }))
+}
+
+/**
+ * 7. Estado de Salud de la Batería del WAD
+ * Retorna timeline de cambios en el estado de salud
+ */
+export const analyzeBatteryHealth = (data) => {
+  const wadValidData = getWADValidData(data)
+  const healthChanges = []
+  let lastHealth = null
+  
+  wadValidData.forEach((row, index) => {
+    const currentHealth = row['WAD ADB Health']
+    
+    if (currentHealth !== 'Unknown' && currentHealth !== lastHealth) {
+      healthChanges.push({
+        time: row['Surgery Time'],
+        health: currentHealth,
+        index: index
+      })
+      lastHealth = currentHealth
+    }
+  })
+  
+  return {
+    changes: healthChanges,
+    timeline: wadValidData.map(row => ({
+      time: row['Surgery Time'],
+      health: row['WAD ADB Health'],
+      status: row['WAD ADB Status']
+    }))
+  }
+}
+
+/**
+ * 8. Mapa de Calor: Temperatura durante Duración del WAD
+ * Retorna datos para crear un mapa de calor de temperatura vs duración de uso
+ */
+export const analyzeTemperatureHeatmap = (data) => {
+  const wadValidData = getWADValidData(data)
+  
+  const heatmapData = wadValidData
+    .filter(row => 
+      row['WAD ADB Temp (0.1°C)'] !== -1 && 
+      row['WAD Duration (min)'] !== -1
+    )
+    .map((row, index) => ({
+      duration: index / 6, // Tiempo transcurrido en minutos
+      temperature: row['WAD ADB Temp (0.1°C)'] / 10, // °C
+      count: 1 // Para acumulación en bins
+    }))
+  
+  // Crear bins para el mapa de calor
+  const durationBins = 10 // Dividir en 10 segmentos de tiempo
+  const tempBins = 10 // Dividir en 10 rangos de temperatura
+  
+  if (heatmapData.length === 0) {
+    return { bins: [], durationRange: [0, 0], tempRange: [0, 0] }
+  }
+  
+  const maxDuration = Math.max(...heatmapData.map(d => d.duration))
+  const minTemp = Math.min(...heatmapData.map(d => d.temperature))
+  const maxTemp = Math.max(...heatmapData.map(d => d.temperature))
+  
+  const durationStep = maxDuration / durationBins
+  const tempStep = (maxTemp - minTemp) / tempBins
+  
+  // Inicializar matriz de bins
+  const bins = []
+  for (let i = 0; i < durationBins; i++) {
+    for (let j = 0; j < tempBins; j++) {
+      bins.push({
+        durationMin: i * durationStep,
+        durationMax: (i + 1) * durationStep,
+        tempMin: minTemp + j * tempStep,
+        tempMax: minTemp + (j + 1) * tempStep,
+        count: 0
+      })
+    }
+  }
+  
+  // Llenar bins con datos
+  heatmapData.forEach(point => {
+    const durationBin = Math.min(Math.floor(point.duration / durationStep), durationBins - 1)
+    const tempBin = Math.min(Math.floor((point.temperature - minTemp) / tempStep), tempBins - 1)
+    const binIndex = durationBin * tempBins + tempBin
+    
+    if (binIndex >= 0 && binIndex < bins.length) {
+      bins[binIndex].count++
+    }
+  })
+  
+  return {
+    bins,
+    durationRange: [0, maxDuration],
+    tempRange: [minTemp, maxTemp],
+    rawData: heatmapData
+  }
+}
