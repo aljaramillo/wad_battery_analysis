@@ -133,8 +133,52 @@ function StatisticsPanel({ session, onNotesChange }) {
         ticks: {
           maxRotation: 45,
           minRotation: 45,
-          autoSkip: true,
-          maxTicksLimit: 12
+          autoSkip: false, // Desactivar autoSkip para control manual
+          callback: function(value, index, ticks) {
+            const totalTicks = this.chart.data.labels.length
+            const maxTicks = 12
+            
+            // Siempre mostrar el primero
+            if (index === 0) {
+              return this.getLabelForValue(value)
+            }
+            
+            // Siempre mostrar el último
+            if (index === totalTicks - 1) {
+              return this.getLabelForValue(value)
+            }
+            
+            // Calcular el intervalo para mostrar aproximadamente maxTicks
+            const interval = Math.ceil(totalTicks / maxTicks)
+            
+            // No mostrar ticks intermedios si están muy cerca del último (dentro de medio intervalo)
+            const distanceToLast = totalTicks - 1 - index
+            if (distanceToLast < interval * 0.6) {
+              return null // Muy cerca del último, no mostrar para evitar solapamiento
+            }
+            
+            // Mostrar si el índice es múltiplo del intervalo
+            if (index % interval === 0) {
+              return this.getLabelForValue(value)
+            }
+            
+            // No mostrar este tick
+            return null
+          },
+          font: function(context) {
+            const totalTicks = context.chart.data.labels.length
+            // Aplicar negrita solo al último tick
+            if (context.index === totalTicks - 1) {
+              return {
+                weight: 'bold',
+                size: 11
+              }
+            }
+            return {
+              weight: 'normal',
+              size: 11
+            }
+          }
         },
         grid: { display: false }
       }
@@ -655,8 +699,15 @@ ${notes}
 
   // ========== PREPARAR DATOS PARA MÉTRICAS TÉCNICAS ADB ==========
   
+  // Verificar si hay datos ADB disponibles
+  const hasADBData = session.data.some(row => 
+    row['WAD ADB Temp (0.1°C)'] !== undefined && 
+    row['WAD ADB Temp (0.1°C)'] !== -1 &&
+    row['WAD ADB Temp (0.1°C)'] !== null
+  )
+  
   // 1. Evolución de Temperatura vs Uso
-  const tempVsUsageData = analyzeTemperatureVsUsage(session.data)
+  const tempVsUsageData = hasADBData ? analyzeTemperatureVsUsage(session.data) : []
   const tempVsUsageChartData = {
     labels: tempVsUsageData.map(d => d.time),
     datasets: [
@@ -680,7 +731,7 @@ ${notes}
   }
 
   // 2. Consumo de Corriente en Tiempo Real
-  const currentData = analyzeCurrentConsumption(session.data)
+  const currentData = hasADBData ? analyzeCurrentConsumption(session.data) : []
   const currentChartData = {
     labels: currentData.map(d => d.time),
     datasets: [
@@ -695,7 +746,7 @@ ${notes}
   }
 
   // 3. Degradación de Voltaje
-  const voltageData = analyzeVoltageDegradation(session.data)
+  const voltageData = hasADBData ? analyzeVoltageDegradation(session.data) : []
   const voltageChartData = {
     labels: voltageData.map((d, idx) => idx), // Usar índice para X
     datasets: [
@@ -711,7 +762,7 @@ ${notes}
   }
 
   // 4. Eficiencia Energética (Potencia)
-  const powerData = analyzePowerConsumption(session.data)
+  const powerData = hasADBData ? analyzePowerConsumption(session.data) : []
   const powerChartData = {
     labels: powerData.map(d => d.time),
     datasets: [
@@ -726,7 +777,7 @@ ${notes}
   }
 
   // 5. Correlación Temperatura-Corriente
-  const tempCurrentData = analyzeTemperatureCurrentCorrelation(session.data)
+  const tempCurrentData = hasADBData ? analyzeTemperatureCurrentCorrelation(session.data) : []
   const tempCurrentChartData = {
     datasets: [
       {
@@ -747,7 +798,7 @@ ${notes}
   }
 
   // 6. Capacidad Real vs Nominal
-  const capacityData = analyzeCapacityComparison(session.data)
+  const capacityData = hasADBData ? analyzeCapacityComparison(session.data) : []
   const capacityChartData = {
     labels: capacityData.map(d => d.time),
     datasets: [
@@ -770,7 +821,7 @@ ${notes}
   }
 
   // 7. Estado de Salud de la Batería
-  const healthData = analyzeBatteryHealth(session.data)
+  const healthData = hasADBData ? analyzeBatteryHealth(session.data) : { changes: [], timeline: [] }
   const healthChartData = {
     labels: healthData.timeline.map(d => d.time),
     datasets: [
@@ -788,7 +839,7 @@ ${notes}
   }
 
   // 8. Mapa de Calor: Temperatura durante Duración
-  const heatmapData = analyzeTemperatureHeatmap(session.data)
+  const heatmapData = hasADBData ? analyzeTemperatureHeatmap(session.data) : { bins: [], durationRange: [0, 0], tempRange: [0, 0], rawData: [] }
   // Para el mapa de calor, usaremos un scatter chart con tamaño de punto proporcional
   const heatmapChartData = {
     datasets: [
@@ -813,7 +864,42 @@ ${notes}
     scales: {
       x: {
         title: { display: true, text: 'Tiempo de Cirugía' },
-        ticks: { maxTicksLimit: 10 }
+        ticks: { 
+          maxTicksLimit: 10,
+          autoSkip: false,
+          callback: function(value, index, ticks) {
+            const totalTicks = this.chart.data.labels.length
+            const maxTicks = 10
+            
+            if (index === 0) {
+              return this.getLabelForValue(value)
+            }
+            
+            if (index === totalTicks - 1) {
+              return this.getLabelForValue(value)
+            }
+            
+            const interval = Math.ceil(totalTicks / maxTicks)
+            const distanceToLast = totalTicks - 1 - index
+            
+            if (distanceToLast < interval * 0.6) {
+              return null
+            }
+            
+            if (index % interval === 0) {
+              return this.getLabelForValue(value)
+            }
+            
+            return null
+          },
+          font: function(context) {
+            const totalTicks = context.chart.data.labels.length
+            if (context.index === totalTicks - 1) {
+              return { weight: 'bold', size: 11 }
+            }
+            return { weight: 'normal', size: 11 }
+          }
+        }
       },
       y: {
         type: 'linear',
@@ -845,7 +931,42 @@ ${notes}
     scales: {
       x: {
         title: { display: true, text: 'Tiempo de Cirugía' },
-        ticks: { maxTicksLimit: 10 }
+        ticks: { 
+          maxTicksLimit: 10,
+          autoSkip: false,
+          callback: function(value, index, ticks) {
+            const totalTicks = this.chart.data.labels.length
+            const maxTicks = 10
+            
+            if (index === 0) {
+              return this.getLabelForValue(value)
+            }
+            
+            if (index === totalTicks - 1) {
+              return this.getLabelForValue(value)
+            }
+            
+            const interval = Math.ceil(totalTicks / maxTicks)
+            const distanceToLast = totalTicks - 1 - index
+            
+            if (distanceToLast < interval * 0.6) {
+              return null
+            }
+            
+            if (index % interval === 0) {
+              return this.getLabelForValue(value)
+            }
+            
+            return null
+          },
+          font: function(context) {
+            const totalTicks = context.chart.data.labels.length
+            if (context.index === totalTicks - 1) {
+              return { weight: 'bold', size: 11 }
+            }
+            return { weight: 'normal', size: 11 }
+          }
+        }
       },
       y: {
         title: { display: true }
@@ -1208,8 +1329,10 @@ ${notes}
         </div>
       </div>
 
-      <h3 className="section-title">⚡ Métricas Técnicas ADB del WAD</h3>
-      <div className="charts-grid">
+      {hasADBData && (
+        <>
+          <h3 className="section-title">⚡ Métricas Técnicas ADB del WAD</h3>
+          <div className="charts-grid">
         {adbMetricsCharts.map(chart => (
           <div key={chart.id} className="chart-card">
             <div className="chart-header">
@@ -1236,7 +1359,9 @@ ${notes}
             </div>
           </div>
         ))}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

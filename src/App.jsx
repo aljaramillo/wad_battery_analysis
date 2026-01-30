@@ -135,6 +135,16 @@ function App() {
                     />
                   </div>
                 </div>
+                <div className="dual-comparison">
+                  <div className="comparison-column">
+                    <h3>📋 Tabla de Datos - {selectedSessionsData[0].customName || selectedSessionsData[0].summary.surgeryDate}</h3>
+                    <DataTable session={selectedSessionsData[0]} />
+                  </div>
+                  <div className="comparison-column">
+                    <h3>📋 Tabla de Datos - {selectedSessionsData[1].customName || selectedSessionsData[1].summary.surgeryDate}</h3>
+                    <DataTable session={selectedSessionsData[1]} />
+                  </div>
+                </div>
               </>
             ) : (
               <>

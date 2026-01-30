@@ -41,22 +41,12 @@ export const getWADValidData = (data) => {
 }
 
 /**
- * Retorna solo los datos válidos de la LS (hasta el último bloque continuo de intensidad -1)
+ * Retorna solo los datos válidos de la LS (hasta el último bloque continuo de batería -1)
+ * IMPORTANTE: Usa 'Light Source %' como criterio porque 'Light Source Intensity' 
+ * puede dar valores como 5 incluso cuando el dispositivo está apagado
  */
 export const getLSValidData = (data) => {
-  // Debug: ver valores de intensidad alrededor de la línea 425 y 868
-  console.log('🔍 DEBUG getLSValidData:')
-  console.log('- Data length:', data.length)
-  console.log('- Intensity at 424:', data[424]?.['Light Source Intensity'])
-  console.log('- Intensity at 425:', data[425]?.['Light Source Intensity'])
-  console.log('- Intensity at 426:', data[426]?.['Light Source Intensity'])
-  console.log('- Intensity at 866:', data[866]?.['Light Source Intensity'])
-  console.log('- Intensity at 867:', data[867]?.['Light Source Intensity'])
-  console.log('- Intensity at 868:', data[868]?.['Light Source Intensity'])
-  
-  const endIdx = findFinalShutdownIndex(data, 'Light Source Intensity')
-  console.log('- endIdx from findFinalShutdownIndex:', endIdx)
-  
+  const endIdx = findFinalShutdownIndex(data, 'Light Source %')
   return data.slice(0, endIdx)
 }
 

@@ -1,4 +1,4 @@
-import { Line } from 'react-chartjs-2'
+import { Line, Scatter } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -9,7 +9,18 @@ import {
   Tooltip,
   Legend
 } from 'chart.js'
-import { processChartData, getColorForSession } from '../utils/dataProcessor'
+import { 
+  processChartData, 
+  getColorForSession,
+  analyzeTemperatureVsUsage,
+  analyzeCurrentConsumption,
+  analyzeVoltageDegradation,
+  analyzePowerConsumption,
+  analyzeTemperatureCurrentCorrelation,
+  analyzeCapacityComparison,
+  analyzeBatteryHealth,
+  analyzeTemperatureHeatmap
+} from '../utils/dataProcessor'
 import ChartTooltip from './ChartTooltip'
 import './ComparisonView.css'
 
@@ -44,6 +55,86 @@ function ComparisonView({ sessions }) {
   })
 
   const labels = Array.from({ length: 100 }, (_, i) => `${i}%`)
+
+  // ========== PREPARAR DATOS ADB COMPARATIVOS ==========
+  // Verificar si las sesiones tienen datos ADB
+  const sessionsWithADB = sessions.map(session => ({
+    hasADB: session.data.some(row => 
+      row['WAD ADB Temp (0.1°C)'] !== undefined && 
+      row['WAD ADB Temp (0.1°C)'] !== -1 &&
+      row['WAD ADB Temp (0.1°C)'] !== null
+    ),
+    data: session.data,
+    label: session.customName || session.summary.surgeryDate,
+    firmware: session.summary.wadFirmware || 'N/A'
+  }))
+
+  const hasAnyADBData = sessionsWithADB.some(s => s.hasADB)
+
+  // Preparar datos ADB si hay al menos una sesión con datos ADB
+  let adbComparisonData = {}
+  if (hasAnyADBData) {
+    // 1. Temperatura vs Batería
+    const tempDataBySession = sessionsWithADB.map((s, idx) => {
+      if (!s.hasADB) return null
+      const data = analyzeTemperatureVsUsage(s.data)
+      const sampleSize = 100
+      const step = Math.max(1, Math.floor(data.length / sampleSize))
+      return {
+        temperature: data.filter((_, i) => i % step === 0).slice(0, sampleSize).map(d => d.temperature),
+        battery: data.filter((_, i) => i % step === 0).slice(0, sampleSize).map(d => d.battery),
+        color: getColorForSession(idx),
+        label: s.label
+      }
+    }).filter(Boolean)
+
+    // 2. Consumo de Corriente
+    const currentDataBySession = sessionsWithADB.map((s, idx) => {
+      if (!s.hasADB) return null
+      const data = analyzeCurrentConsumption(s.data)
+      const sampleSize = 100
+      const step = Math.max(1, Math.floor(data.length / sampleSize))
+      return {
+        current: data.filter((_, i) => i % step === 0).slice(0, sampleSize).map(d => d.current),
+        color: getColorForSession(idx),
+        label: s.label
+      }
+    }).filter(Boolean)
+
+    // 3. Consumo de Potencia
+    const powerDataBySession = sessionsWithADB.map((s, idx) => {
+      if (!s.hasADB) return null
+      const data = analyzePowerConsumption(s.data)
+      const sampleSize = 100
+      const step = Math.max(1, Math.floor(data.length / sampleSize))
+      return {
+        power: data.filter((_, i) => i % step === 0).slice(0, sampleSize).map(d => d.power),
+        color: getColorForSession(idx),
+        label: s.label
+      }
+    }).filter(Boolean)
+
+    // 4. Capacidad Reportada vs Real
+    const capacityDataBySession = sessionsWithADB.map((s, idx) => {
+      if (!s.hasADB) return null
+      const data = analyzeCapacityComparison(s.data)
+      const sampleSize = 100
+      const step = Math.max(1, Math.floor(data.length / sampleSize))
+      return {
+        reported: data.filter((_, i) => i % step === 0).slice(0, sampleSize).map(d => d.reportedBattery),
+        adb: data.filter((_, i) => i % step === 0).slice(0, sampleSize).map(d => d.adbCapacity),
+        color: getColorForSession(idx),
+        label: s.label
+      }
+    }).filter(Boolean)
+
+    adbComparisonData = {
+      tempVsBattery: tempDataBySession,
+      current: currentDataBySession,
+      power: powerDataBySession,
+      capacity: capacityDataBySession
+    }
+  }
 
   const wadComparisonData = {
     labels,
@@ -120,7 +211,7 @@ function ComparisonView({ sessions }) {
       x: {
         title: {
           display: true,
-          text: 'Progreso de Cirugía (%)',
+          text: `Progreso de Cirugía (%) | Duraciones: ${sessions.map(s => `${s.customName || s.summary.surgeryDate}: ${s.summary.duration}min`).join(' vs ')}`,
           font: {
             size: 13,
             weight: '500'
@@ -128,10 +219,23 @@ function ComparisonView({ sessions }) {
         },
         ticks: {
           autoSkip: true,
-          maxTicksLimit: 10
+          maxTicksLimit: 10,
+          callback: function(value, index, ticks) {
+            // Siempre mostrar 0% y 100%
+            if (index === 0 || index === ticks.length - 1) {
+              return this.getLabelForValue(value)
+            }
+            return this.getLabelForValue(value)
+          }
         },
         grid: {
           display: false
+        },
+        afterFit: function(scale) {
+          // Asegurar que se muestra el 100%
+          if (scale.ticks.length > 0) {
+            scale.ticks[scale.ticks.length - 1].major = true
+          }
         }
       }
     }
@@ -162,6 +266,199 @@ function ComparisonView({ sessions }) {
           </div>
         </div>
       </div>
+
+      {hasAnyADBData && (
+        <div className="adb-comparison-section">
+          <h2>⚡ Comparación de Métricas Técnicas ADB</h2>
+          <div className="comparison-charts">
+            {/* Temperatura vs Batería */}
+            {adbComparisonData.tempVsBattery && adbComparisonData.tempVsBattery.length > 0 && (
+              <div className="comparison-chart">
+                <div className="chart-header">
+                  <h3>Temperatura vs Batería</h3>
+                  <ChartTooltip text="Compara la evolución de temperatura del WAD entre sesiones durante el consumo de batería." />
+                </div>
+                <div className="chart-container">
+                  <Line
+                    data={{
+                      labels,
+                      datasets: [
+                        ...adbComparisonData.tempVsBattery.map(s => ({
+                          label: `${s.label} - Temp (°C)`,
+                          data: s.temperature,
+                          borderColor: s.color,
+                          backgroundColor: s.color,
+                          borderWidth: 2,
+                          pointRadius: 0,
+                          pointHoverRadius: 4,
+                          tension: 0.4,
+                          yAxisID: 'y'
+                        })),
+                        ...adbComparisonData.tempVsBattery.map(s => ({
+                          label: `${s.label} - Batería (%)`,
+                          data: s.battery,
+                          borderColor: s.color,
+                          backgroundColor: s.color,
+                          borderWidth: 2,
+                          borderDash: [5, 5],
+                          pointRadius: 0,
+                          pointHoverRadius: 4,
+                          tension: 0.4,
+                          yAxisID: 'y1'
+                        }))
+                      ]
+                    }}
+                    options={{
+                      ...options,
+                      scales: {
+                        y: {
+                          type: 'linear',
+                          display: true,
+                          position: 'left',
+                          title: { display: true, text: 'Temperatura (°C)' }
+                        },
+                        y1: {
+                          type: 'linear',
+                          display: true,
+                          position: 'right',
+                          title: { display: true, text: 'Batería (%)' },
+                          grid: { drawOnChartArea: false }
+                        },
+                        x: options.scales.x
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Consumo de Corriente */}
+            {adbComparisonData.current && adbComparisonData.current.length > 0 && (
+              <div className="comparison-chart">
+                <div className="chart-header">
+                  <h3>Consumo de Corriente</h3>
+                  <ChartTooltip text="Compara el consumo de corriente en mA entre sesiones durante la cirugía." />
+                </div>
+                <div className="chart-container">
+                  <Line
+                    data={{
+                      labels,
+                      datasets: adbComparisonData.current.map(s => ({
+                        label: `${s.label} - Corriente (mA)`,
+                        data: s.current,
+                        borderColor: s.color,
+                        backgroundColor: s.color,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        tension: 0.4
+                      }))
+                    }}
+                    options={{
+                      ...options,
+                      scales: {
+                        y: {
+                          beginAtZero: false,
+                          title: { display: true, text: 'Corriente (mA)' }
+                        },
+                        x: options.scales.x
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Consumo de Potencia */}
+            {adbComparisonData.power && adbComparisonData.power.length > 0 && (
+              <div className="comparison-chart">
+                <div className="chart-header">
+                  <h3>Consumo de Potencia</h3>
+                  <ChartTooltip text="Compara el consumo de potencia calculado (V × I) en mW entre sesiones." />
+                </div>
+                <div className="chart-container">
+                  <Line
+                    data={{
+                      labels,
+                      datasets: adbComparisonData.power.map(s => ({
+                        label: `${s.label} - Potencia (mW)`,
+                        data: s.power,
+                        borderColor: s.color,
+                        backgroundColor: s.color,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        tension: 0.4
+                      }))
+                    }}
+                    options={{
+                      ...options,
+                      scales: {
+                        y: {
+                          beginAtZero: false,
+                          title: { display: true, text: 'Potencia (mW)' }
+                        },
+                        x: options.scales.x
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Capacidad Reportada vs ADB */}
+            {adbComparisonData.capacity && adbComparisonData.capacity.length > 0 && (
+              <div className="comparison-chart">
+                <div className="chart-header">
+                  <h3>Capacidad: Sistema vs ADB</h3>
+                  <ChartTooltip text="Compara la capacidad reportada por el sistema versus la leída por ADB. Las diferencias indican problemas de calibración." />
+                </div>
+                <div className="chart-container">
+                  <Line
+                    data={{
+                      labels,
+                      datasets: [
+                        ...adbComparisonData.capacity.map(s => ({
+                          label: `${s.label} - Sistema (%)`,
+                          data: s.reported,
+                          borderColor: s.color,
+                          backgroundColor: s.color,
+                          borderWidth: 2,
+                          pointRadius: 0,
+                          pointHoverRadius: 4,
+                          tension: 0.4
+                        })),
+                        ...adbComparisonData.capacity.map(s => ({
+                          label: `${s.label} - ADB (%)`,
+                          data: s.adb,
+                          borderColor: s.color,
+                          backgroundColor: s.color,
+                          borderWidth: 2,
+                          borderDash: [5, 5],
+                          pointRadius: 0,
+                          pointHoverRadius: 4,
+                          tension: 0.4
+                        }))
+                      ]
+                    }}
+                    options={{
+                      ...options,
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          max: 100,
+                          title: { display: true, text: 'Capacidad (%)' }
+                        },
+                        x: options.scales.x
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="comparison-table">
         <h3>Tabla Comparativa</h3>
