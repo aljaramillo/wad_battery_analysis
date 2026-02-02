@@ -60,9 +60,10 @@
 }
 
 .sessions-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  grid-auto-flow: row;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
 }
 
 .session-item {
