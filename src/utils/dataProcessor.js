@@ -94,6 +94,29 @@ export const calculateStatistics = (data) => {
   const wadDuration = wadValidData.map(row => row['WAD Duration (min)']).filter(v => v != null && v > 0)
   const lsDuration = lsValidData.map(row => row['Light Source Duration (min)']).filter(v => v != null && v > 0)
 
+  // Calcular tiempo hasta que la estimación llega a 1 minuto (o 0 si no llega a 1)
+  const wadTimeToOneMinute = (() => {
+    let idx = data.findIndex(row => row['WAD Duration (min)'] <= 1 && row['WAD Duration (min)'] > 0)
+    // Si no encuentra 1 minuto, buscar cuando llega a 0
+    if (idx === -1) {
+      idx = data.findIndex(row => row['WAD Duration (min)'] === 0)
+    }
+    if (idx === -1) return 0
+    // Calcular tiempo transcurrido hasta ese punto (cada registro = 10 segundos)
+    return idx / 6 // minutos
+  })()
+
+  const lsTimeToOneMinute = (() => {
+    let idx = data.findIndex(row => row['Light Source Duration (min)'] <= 1 && row['Light Source Duration (min)'] > 0)
+    // Si no encuentra 1 minuto, buscar cuando llega a 0
+    if (idx === -1) {
+      idx = data.findIndex(row => row['Light Source Duration (min)'] === 0)
+    }
+    if (idx === -1) return 0
+    // Calcular tiempo transcurrido hasta ese punto (cada registro = 10 segundos)
+    return idx / 6 // minutos
+  })()
+
   return {
     wad: {
       initial: firstValidWadIdx >= 0 ? wadBatteryRaw[firstValidWadIdx] : 0,
@@ -106,6 +129,7 @@ export const calculateStatistics = (data) => {
         : 0,
       maxDurationEstimate: wadDuration.length > 0 ? Math.max(...wadDuration) : 0,
       minDurationEstimate: wadDuration.length > 0 ? Math.min(...wadDuration.filter(v => v > 0)) : 0,
+      timeToOneMinute: wadTimeToOneMinute
     },
     lightSource: {
       initial: firstValidLsIdx >= 0 ? lsBatteryRaw[firstValidLsIdx] : 0,
@@ -118,6 +142,7 @@ export const calculateStatistics = (data) => {
         : 0,
       maxDurationEstimate: lsDuration.length > 0 ? Math.max(...lsDuration) : 0,
       minDurationEstimate: lsDuration.length > 0 ? Math.min(...lsDuration.filter(v => v > 0)) : 0,
+      timeToOneMinute: lsTimeToOneMinute
     }
   }
 }
