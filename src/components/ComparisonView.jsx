@@ -62,40 +62,54 @@ function ComparisonView({ sessions }) {
   // ========== PREPARAR DATOS DE TIEMPOS MÁXIMOS ==========
   const durationComparisonData = sessions.map((session, idx) => {
     const stats = calculateStatistics(session.data)
+    
     return {
       label: session.customName || session.summary.surgeryDate,
-      wadEstimatedDuration: stats.wad.timeToOneMinute,
-      lsEstimatedDuration: stats.lightSource.timeToOneMinute,
-      realDuration: session.summary.duration,
+      wadDuration: session.summary.duration, // Usar duración de la cirugía
+      lsDuration: stats.lightSource.realDuration,
       color: getColorForSession(idx)
     }
   }).reverse() // Invertir para mostrar más antiguo primero
+
+  // Calcular mínimo y máximo para WAD
+  const wadDurations = durationComparisonData.map(d => d.wadDuration)
+  const minWadDuration = Math.min(...wadDurations)
+  const maxWadDuration = Math.max(...wadDurations)
+
+  // Calcular mínimo y máximo para LS
+  const lsDurations = durationComparisonData.map(d => d.lsDuration)
+  const minLsDuration = Math.min(...lsDurations)
+  const maxLsDuration = Math.max(...lsDurations)
 
   const wadDurationChartData = {
     labels: durationComparisonData.map(d => d.label),
     datasets: [
       {
-        label: 'Duración Estimada WAD (min)',
-        data: durationComparisonData.map(d => d.wadEstimatedDuration),
-        backgroundColor: durationComparisonData.map(d => d.color + '80'),
+        label: 'Duración WAD (min)',
+        data: durationComparisonData.map(d => d.wadDuration),
+        backgroundColor: durationComparisonData.map(d => d.color + 'CC'),
         borderColor: durationComparisonData.map(d => d.color),
-        borderWidth: 2,
-        order: 2
+        borderWidth: 2
       },
       {
-        label: 'Duración Real (min)',
-        data: durationComparisonData.map(d => d.realDuration),
-        backgroundColor: durationComparisonData.map(d => {
-          // Convertir el color a más oscuro
-          const hex = d.color.replace('#', '')
-          const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - 60)
-          const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - 60)
-          const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - 60)
-          return `rgb(${r}, ${g}, ${b})`
-        }),
-        borderColor: durationComparisonData.map(d => d.color),
+        type: 'line',
+        label: 'Mínimo',
+        data: Array(durationComparisonData.length).fill(minWadDuration),
+        borderColor: 'rgb(231, 76, 60)',
         borderWidth: 2,
-        order: 1
+        borderDash: [5, 5],
+        pointRadius: 0,
+        fill: false
+      },
+      {
+        type: 'line',
+        label: 'Máximo',
+        data: Array(durationComparisonData.length).fill(maxWadDuration),
+        borderColor: 'rgb(46, 204, 113)',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        pointRadius: 0,
+        fill: false
       }
     ]
   }
@@ -104,27 +118,31 @@ function ComparisonView({ sessions }) {
     labels: durationComparisonData.map(d => d.label),
     datasets: [
       {
-        label: 'Duración Estimada LS (min)',
-        data: durationComparisonData.map(d => d.lsEstimatedDuration),
-        backgroundColor: durationComparisonData.map(d => d.color + '80'),
+        label: 'Duración LS (min)',
+        data: durationComparisonData.map(d => d.lsDuration),
+        backgroundColor: durationComparisonData.map(d => d.color + 'CC'),
         borderColor: durationComparisonData.map(d => d.color),
-        borderWidth: 2,
-        order: 2
+        borderWidth: 2
       },
       {
-        label: 'Duración Real (min)',
-        data: durationComparisonData.map(d => d.realDuration),
-        backgroundColor: durationComparisonData.map(d => {
-          // Convertir el color a más oscuro
-          const hex = d.color.replace('#', '')
-          const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - 60)
-          const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - 60)
-          const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - 60)
-          return `rgb(${r}, ${g}, ${b})`
-        }),
-        borderColor: durationComparisonData.map(d => d.color),
+        type: 'line',
+        label: 'Mínimo',
+        data: Array(durationComparisonData.length).fill(minLsDuration),
+        borderColor: 'rgb(231, 76, 60)',
         borderWidth: 2,
-        order: 1
+        borderDash: [5, 5],
+        pointRadius: 0,
+        fill: false
+      },
+      {
+        type: 'line',
+        label: 'Máximo',
+        data: Array(durationComparisonData.length).fill(maxLsDuration),
+        borderColor: 'rgb(46, 204, 113)',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        pointRadius: 0,
+        fill: false
       }
     ]
   }
@@ -156,7 +174,16 @@ function ComparisonView({ sessions }) {
     },
     scales: {
       y: {
-        beginAtZero: true,
+        min: function(context) {
+          const datasetData = context.chart.data.datasets[0].data
+          const min = Math.min(...datasetData)
+          return Math.max(0, min - 30)
+        },
+        max: function(context) {
+          const datasetData = context.chart.data.datasets[0].data
+          const max = Math.max(...datasetData)
+          return max + 30
+        },
         title: {
           display: true,
           text: 'Duración (minutos)',
@@ -181,6 +208,30 @@ function ComparisonView({ sessions }) {
         grid: {
           display: false
         }
+      }
+    },
+    animation: {
+      onComplete: function(animation) {
+        const chart = animation.chart
+        const ctx = chart.ctx
+        
+        chart.data.datasets.forEach((dataset, datasetIndex) => {
+          const meta = chart.getDatasetMeta(datasetIndex)
+          
+          // Solo mostrar valores en las barras (no en las líneas)
+          if (dataset.type !== 'line') {
+            meta.data.forEach((bar, index) => {
+              const value = dataset.data[index]
+              if (value > 0) {
+                ctx.fillStyle = '#333'
+                ctx.font = 'bold 11px Arial'
+                ctx.textAlign = 'center'
+                ctx.textBaseline = 'bottom'
+                ctx.fillText(value.toFixed(1), bar.x, bar.y - 5)
+              }
+            })
+          }
+        })
       }
     }
   }
@@ -374,12 +425,12 @@ function ComparisonView({ sessions }) {
     <div className="comparison-view">
       <h2>Vista de Comparación ({sessions.length} sesiones)</h2>
       
-      {/* Gráficas de Tiempos Máximos Estimados */}
+      {/* Gráficas de Duración de Dispositivos */}
       <div className="comparison-charts">
         <div className="comparison-chart">
           <div className="chart-header">
-            <h3>Duración Máxima Estimada WAD</h3>
-            <ChartTooltip text="Compara la duración máxima estimada por el dispositivo WAD entre las sesiones. Este valor representa el tiempo total que el dispositivo estimó que podía funcionar con la batería disponible." />
+            <h3>Duración WAD</h3>
+            <ChartTooltip text="Compara la duración de funcionamiento del dispositivo WAD en cada cirugía. Las líneas discontinuas muestran el valor mínimo (rojo) y máximo (verde) entre todas las sesiones." />
           </div>
           <div className="chart-container">
             <Bar data={wadDurationChartData} options={durationOptions} />
@@ -388,8 +439,8 @@ function ComparisonView({ sessions }) {
 
         <div className="comparison-chart">
           <div className="chart-header">
-            <h3>Duración Máxima Estimada Light Source</h3>
-            <ChartTooltip text="Compara la duración máxima estimada por el Light Source entre las sesiones. Permite identificar diferencias en las estimaciones según el uso y la configuración." />
+            <h3>Duración Light Source</h3>
+            <ChartTooltip text="Compara la duración de funcionamiento del dispositivo Light Source en cada cirugía. Las líneas discontinuas muestran el valor mínimo (rojo) y máximo (verde) entre todas las sesiones." />
           </div>
           <div className="chart-container">
             <Bar data={lsDurationChartData} options={durationOptions} />
@@ -631,21 +682,22 @@ function ComparisonView({ sessions }) {
             </tr>
           </thead>
           <tbody>
-            {sessions.map((session, idx) => {
+            {sessions.slice().reverse().map((session, idx) => {
               const batteryStats = session.data ? calculateStatistics(session.data) : null
+              
               return (
                 <tr key={idx}>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.customName || `Sesión ${idx + 1}`}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.customName || `Sesión ${sessions.length - idx}`}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.surgeryDate}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.duration} min</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.wadInitial}%</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.wadFinal}%</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.wadDrop?.toFixed(1)}%</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{batteryStats?.wad?.timeToOneMinute > 0 ? `${batteryStats.wad.timeToOneMinute.toFixed(1)} min` : 'N/A'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.duration > 0 ? `${session.summary.duration} min` : 'N/A'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.lightSourceInitial}%</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.lightSourceFinal}%</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.lightSourceDrop?.toFixed(1)}%</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{batteryStats?.lightSource?.timeToOneMinute > 0 ? `${batteryStats.lightSource.timeToOneMinute.toFixed(1)} min` : 'N/A'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{batteryStats?.lightSource?.realDuration > 0 ? `${batteryStats.lightSource.realDuration.toFixed(1)} min` : 'N/A'}</td>
                 </tr>
               )
             })}

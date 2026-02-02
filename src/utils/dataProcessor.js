@@ -94,27 +94,35 @@ export const calculateStatistics = (data) => {
   const wadDuration = wadValidData.map(row => row['WAD Duration (min)']).filter(v => v != null && v > 0)
   const lsDuration = lsValidData.map(row => row['Light Source Duration (min)']).filter(v => v != null && v > 0)
 
-  // Calcular tiempo hasta que la estimación llega a 1 minuto (o 0 si no llega a 1)
+  // Calcular tiempo hasta que la estimación llega a valores bajos (más robusto)
   const wadTimeToOneMinute = (() => {
-    let idx = data.findIndex(row => row['WAD Duration (min)'] <= 1 && row['WAD Duration (min)'] > 0)
-    // Si no encuentra 1 minuto, buscar cuando llega a 0
-    if (idx === -1) {
-      idx = data.findIndex(row => row['WAD Duration (min)'] === 0)
+    // Buscar el PRIMER punto donde la duración llega a <= 1
+    for (let i = 0; i < data.length; i++) {
+      const dur = data[i]['WAD Duration (min)']
+      const battery = data[i]['WAD Battery %']
+      // Solo considerar si el dispositivo está encendido (batería >= 0)
+      if (battery >= 0 && dur !== null && dur !== undefined && dur !== -1 && dur <= 1) {
+        return i / 6 // minutos
+      }
     }
-    if (idx === -1) return 0
-    // Calcular tiempo transcurrido hasta ese punto (cada registro = 10 segundos)
-    return idx / 6 // minutos
+    
+    // Si nunca llega a 1, usar la duración total de la cirugía
+    return data.length / 6
   })()
 
   const lsTimeToOneMinute = (() => {
-    let idx = data.findIndex(row => row['Light Source Duration (min)'] <= 1 && row['Light Source Duration (min)'] > 0)
-    // Si no encuentra 1 minuto, buscar cuando llega a 0
-    if (idx === -1) {
-      idx = data.findIndex(row => row['Light Source Duration (min)'] === 0)
+    // Buscar el PRIMER punto donde la duración llega a <= 1
+    for (let i = 0; i < data.length; i++) {
+      const dur = data[i]['Light Source Duration (min)']
+      const battery = data[i]['Light Source %']
+      // Solo considerar si el dispositivo está encendido (batería >= 0)
+      if (battery >= 0 && dur !== null && dur !== undefined && dur !== -1 && dur <= 1) {
+        return i / 6 // minutos
+      }
     }
-    if (idx === -1) return 0
-    // Calcular tiempo transcurrido hasta ese punto (cada registro = 10 segundos)
-    return idx / 6 // minutos
+    
+    // Si nunca llega a 1, usar la duración total de la cirugía
+    return data.length / 6
   })()
 
   return {
@@ -129,7 +137,8 @@ export const calculateStatistics = (data) => {
         : 0,
       maxDurationEstimate: wadDuration.length > 0 ? Math.max(...wadDuration) : 0,
       minDurationEstimate: wadDuration.length > 0 ? Math.min(...wadDuration.filter(v => v > 0)) : 0,
-      timeToOneMinute: wadTimeToOneMinute
+      timeToOneMinute: wadTimeToOneMinute,
+      realDuration: wadRealTime
     },
     lightSource: {
       initial: firstValidLsIdx >= 0 ? lsBatteryRaw[firstValidLsIdx] : 0,
@@ -142,7 +151,8 @@ export const calculateStatistics = (data) => {
         : 0,
       maxDurationEstimate: lsDuration.length > 0 ? Math.max(...lsDuration) : 0,
       minDurationEstimate: lsDuration.length > 0 ? Math.min(...lsDuration.filter(v => v > 0)) : 0,
-      timeToOneMinute: lsTimeToOneMinute
+      timeToOneMinute: lsTimeToOneMinute,
+      realDuration: lsRealTime
     }
   }
 }
