@@ -8,6 +8,7 @@ import './App.css'
 function App() {
   const [sessions, setSessions] = useState([])
   const [selectedSessions, setSelectedSessions] = useState([])
+  const [draggedIndex, setDraggedIndex] = useState(null)
 
   const handleFilesLoaded = (newSessions) => {
     const sessionsWithNames = newSessions.map(session => ({
@@ -15,8 +16,29 @@ function App() {
       customName: session.summary.customName || session.customName || session.id || '',
       notes: session.summary.notes || session.notes || ''
     }))
-    setSessions(prev => [...prev, ...sessionsWithNames])
-    setSelectedSessions(prev => [...prev, ...sessionsWithNames.map((_, idx) => sessions.length + idx)])
+    
+    // Ordenar por fecha (más antigua primero)
+    sessionsWithNames.sort((a, b) => {
+      const dateA = new Date(a.summary.surgeryDate || 0)
+      const dateB = new Date(b.summary.surgeryDate || 0)
+      return dateA - dateB
+    })
+    
+    setSessions(prev => {
+      const combined = [...prev, ...sessionsWithNames]
+      // Reordenar todo el array por fecha
+      combined.sort((a, b) => {
+        const dateA = new Date(a.summary.surgeryDate || 0)
+        const dateB = new Date(b.summary.surgeryDate || 0)
+        return dateA - dateB
+      })
+      return combined
+    })
+    
+    setSelectedSessions(prev => {
+      const newIndices = sessionsWithNames.map((_, idx) => sessions.length + idx)
+      return [...prev, ...newIndices]
+    })
   }
 
   const handleSessionNameChange = (index, newName) => {
@@ -44,7 +66,47 @@ function App() {
     setSelectedSessions(prev => prev.filter(i => i !== index).map(i => i > index ? i - 1 : i))
   }
 
-  const selectedSessionsData = selectedSessions.map(idx => sessions[idx]).filter(Boolean)
+  const handleDragStart = (index) => {
+    setDraggedIndex(index)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault() // Necesario para permitir el drop
+  }
+
+  const handleDrop = (targetIndex) => {
+    if (draggedIndex === null || draggedIndex === targetIndex) return
+
+    // Reordenar el array de sesiones
+    const newSessions = [...sessions]
+    const [draggedSession] = newSessions.splice(draggedIndex, 1)
+    newSessions.splice(targetIndex, 0, draggedSession)
+    setSessions(newSessions)
+
+    // Actualizar los índices seleccionados
+    const newSelectedSessions = selectedSessions.map(idx => {
+      if (idx === draggedIndex) return targetIndex
+      if (draggedIndex < targetIndex) {
+        // Moviendo hacia abajo
+        if (idx > draggedIndex && idx <= targetIndex) return idx - 1
+      } else {
+        // Moviendo hacia arriba
+        if (idx >= targetIndex && idx < draggedIndex) return idx + 1
+      }
+      return idx
+    })
+    setSelectedSessions(newSelectedSessions)
+    setDraggedIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+  }
+
+  // Mantener el orden de las sesiones (no el orden de selección)
+  const selectedSessionsData = sessions
+    .map((session, idx) => selectedSessions.includes(idx) ? session : null)
+    .filter(Boolean)
 
   return (
     <div className="app">
@@ -65,7 +127,18 @@ function App() {
                 <h2>Sesiones Cargadas ({sessions.length})</h2>
                 <div className="sessions-grid">
               {sessions.map((session, idx) => (
-                <div key={idx} className={`session-item ${selectedSessions.includes(idx) ? 'selected' : ''}`}>
+                <div 
+                  key={idx} 
+                  className={`session-item ${selectedSessions.includes(idx) ? 'selected' : ''} ${draggedIndex === idx ? 'dragging' : ''}`}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={handleDragOver}
+                  onDrop={() => handleDrop(idx)}
+                  onDragEnd={handleDragEnd}
+                >
+                  <div className="drag-handle" title="Arrastrar para reordenar">
+                    <span>☰</span>
+                  </div>
                   <input
                     type="checkbox"
                     checked={selectedSessions.includes(idx)}

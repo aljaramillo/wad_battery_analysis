@@ -129,27 +129,41 @@ export const calculateStatistics = (data) => {
  * Retorna array con datos solo del WAD
  */
 export const analyzeWADAccuracy = (data) => {
-  const wadValidData = getWADValidData(data)
   const results = []
-  const totalTime = wadValidData.length / 6 // minutos totales
   
-  for (let i = 0; i < wadValidData.length; i++) {
-    const row = wadValidData[i]
-    const timeElapsed = i / 6
+  if (data.length === 0) return results
+  
+  // Usar el tiempo ABSOLUTO desde el inicio de TODA la cirugía
+  const firstTimeAbsolute = data[0]['Surgery Time']
+  const lastTimeAbsolute = data[data.length - 1]['Surgery Time']
+  
+  // Convertir tiempos HH:MM:SS a minutos
+  const parseTimeToMinutes = (timeStr) => {
+    const parts = timeStr.split(':')
+    const hours = parseInt(parts[0], 10)
+    const minutes = parseInt(parts[1], 10)
+    const seconds = parseInt(parts[2], 10)
+    return hours * 60 + minutes + seconds / 60
+  }
+  
+  const totalTimeMinutes = parseTimeToMinutes(lastTimeAbsolute) - parseTimeToMinutes(firstTimeAbsolute)
+  
+  // Graficar TODOS los puntos de tiempo, no solo donde hay datos del WAD
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i]
     const wadEstimate = row['WAD Duration (min)']
     const wadBattery = row['WAD Battery %']
     
-    // Solo excluir si batería es -1 (apagado)
-    if (wadBattery !== -1 && wadEstimate >= 0) {
-      const actualRemaining = totalTime - timeElapsed
-      
-      results.push({
-        time: row['Surgery Time'],
-        estimate: wadEstimate,
-        actual: actualRemaining,
-        error: Math.abs(wadEstimate - actualRemaining)
-      })
-    }
+    // Línea diagonal perfecta basada en el progreso (índice)
+    const progress = i / (data.length - 1) // 0 a 1
+    const actualRemaining = totalTimeMinutes * (1 - progress)
+    
+    results.push({
+      time: row['Surgery Time'],
+      estimate: (wadBattery >= 0 && wadEstimate >= 0) ? wadEstimate : null, // null si no hay datos
+      actual: actualRemaining, // SIEMPRE presente
+      error: (wadBattery >= 0 && wadEstimate >= 0) ? Math.abs(wadEstimate - actualRemaining) : null
+    })
   }
   
   return results
@@ -160,27 +174,41 @@ export const analyzeWADAccuracy = (data) => {
  * Retorna array con datos solo de la LS
  */
 export const analyzeLSAccuracy = (data) => {
-  const lsValidData = getLSValidData(data)
   const results = []
-  const totalTime = lsValidData.length / 6 // minutos totales
   
-  for (let i = 0; i < lsValidData.length; i++) {
-    const row = lsValidData[i]
-    const timeElapsed = i / 6
+  if (data.length === 0) return results
+  
+  // Usar el tiempo ABSOLUTO desde el inicio de TODA la cirugía
+  const firstTimeAbsolute = data[0]['Surgery Time']
+  const lastTimeAbsolute = data[data.length - 1]['Surgery Time']
+  
+  // Convertir tiempos HH:MM:SS a minutos
+  const parseTimeToMinutes = (timeStr) => {
+    const parts = timeStr.split(':')
+    const hours = parseInt(parts[0], 10)
+    const minutes = parseInt(parts[1], 10)
+    const seconds = parseInt(parts[2], 10)
+    return hours * 60 + minutes + seconds / 60
+  }
+  
+  const totalTimeMinutes = parseTimeToMinutes(lastTimeAbsolute) - parseTimeToMinutes(firstTimeAbsolute)
+  
+  // Graficar TODOS los puntos de tiempo, no solo donde hay datos del LS
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i]
     const lsEstimate = row['Light Source Duration (min)']
-    const lsIntensity = row['Light Source Intensity']
+    const lsBattery = row['Light Source %']
     
-    // Solo excluir si intensidad es -1 (apagado)
-    if (lsIntensity !== -1 && lsEstimate >= 0) {
-      const actualRemaining = totalTime - timeElapsed
-      
-      results.push({
-        time: row['Surgery Time'],
-        estimate: lsEstimate,
-        actual: actualRemaining,
-        error: Math.abs(lsEstimate - actualRemaining)
-      })
-    }
+    // Línea diagonal perfecta basada en el progreso (índice)
+    const progress = i / (data.length - 1) // 0 a 1
+    const actualRemaining = totalTimeMinutes * (1 - progress)
+    
+    results.push({
+      time: row['Surgery Time'],
+      estimate: (lsBattery >= 0 && lsEstimate >= 0) ? lsEstimate : null, // null si no hay datos
+      actual: actualRemaining, // SIEMPRE presente
+      error: (lsBattery >= 0 && lsEstimate >= 0) ? Math.abs(lsEstimate - actualRemaining) : null
+    })
   }
   
   return results
