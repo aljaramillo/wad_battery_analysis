@@ -49,6 +49,7 @@
 
 .stats-table th.centered-header {
   text-align: center;
+  color: black;
 }
 
 .stats-table th:first-child {

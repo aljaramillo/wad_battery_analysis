@@ -25,6 +25,12 @@
   }
 }
 
+.comparison-chart {
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
 .comparison-chart h3 {
   font-size: 1.1rem;
   margin-bottom: 1rem;

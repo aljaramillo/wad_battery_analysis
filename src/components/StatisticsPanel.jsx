@@ -216,7 +216,7 @@ function StatisticsPanel({ session, onNotesChange }) {
         label: 'Error de Estimación (min)',
         data: sampledWadAccuracy.map(d => d.error),
         borderColor: '#f39c12',
-        backgroundColor: 'rgba(243, 156, 18, 0.2)',
+        backgroundColor: 'rgba(243, 156, 18, 0.5)',
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.4,
@@ -258,7 +258,7 @@ function StatisticsPanel({ session, onNotesChange }) {
         label: 'Error de Estimación (min)',
         data: sampledLsAccuracy.map(d => d.error),
         borderColor: '#9b59b6',
-        backgroundColor: 'rgba(155, 89, 182, 0.2)',
+        backgroundColor: 'rgba(155, 89, 182, 0.5)',
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.4,
@@ -344,7 +344,7 @@ function StatisticsPanel({ session, onNotesChange }) {
         label: 'Tasa Descarga WAD (% / min)',
         data: combinedWadRates,
         borderColor: '#667eea',
-        backgroundColor: 'rgba(102, 126, 234, 0.2)',
+        backgroundColor: 'rgba(102, 126, 234, 0.5)',
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.4,
@@ -355,7 +355,7 @@ function StatisticsPanel({ session, onNotesChange }) {
         label: 'Tasa Descarga LS (% / min)',
         data: combinedLsRates,
         borderColor: '#f093fb',
-        backgroundColor: 'rgba(240, 147, 251, 0.2)',
+        backgroundColor: 'rgba(240, 147, 251, 0.5)',
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.4,
@@ -1045,15 +1045,6 @@ ${notes}
       tooltip: 'Relaciona la intensidad de luz configurada con el consumo de batería del Light Source. Ayuda a entender cómo diferentes niveles de intensidad afectan la duración.',
       data: intensityImpactData,
       options: intensityOptions
-    },
-    {
-      id: 'dischargeRate',
-      title: 'Verificación de Tasa de Descarga por Minuto',
-      deviceSerial: null, // No aplica serial aquí porque muestra ambos dispositivos
-      firmware: null,
-      tooltip: 'Muestra cuánto porcentaje de batería se consume por minuto en cada momento. Picos indican momentos de alto consumo. Útil para verificar patrones de descarga.',
-      data: dischargeRateData,
-      options: chartOptions
     }
   ]
 
@@ -1206,40 +1197,40 @@ ${notes}
           <thead>
             <tr>
               <th>Métrica</th>
-              <th className="centered-header">WAD</th>
-              <th className="centered-header">Light Source</th>
+              <th className="centered-header" style={{ backgroundColor: '#e3f2fd' }}>WAD</th>
+              <th className="centered-header" style={{ backgroundColor: '#fff9c4' }}>Light Source</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td>Batería Inicial</td>
-              <td>{stats.wad.initial}%</td>
-              <td>{stats.lightSource.initial}%</td>
+              <td style={{ backgroundColor: '#e3f2fd' }}>{stats.wad.initial}%</td>
+              <td style={{ backgroundColor: '#fff9c4' }}>{stats.lightSource.initial}%</td>
             </tr>
             <tr>
               <td>Batería Final</td>
-              <td>{stats.wad.final}%</td>
-              <td>{stats.lightSource.final}%</td>
+              <td style={{ backgroundColor: '#e3f2fd' }}>{stats.wad.final}%</td>
+              <td style={{ backgroundColor: '#fff9c4' }}>{stats.lightSource.final}%</td>
             </tr>
             <tr>
               <td>Consumo Total</td>
-              <td>{stats.wad.drop.toFixed(1)}%</td>
-              <td>{stats.lightSource.drop.toFixed(1)}%</td>
+              <td style={{ backgroundColor: '#e3f2fd' }}>{stats.wad.drop.toFixed(1)}%</td>
+              <td style={{ backgroundColor: '#fff9c4' }}>{stats.lightSource.drop.toFixed(1)}%</td>
             </tr>
             <tr>
               <td>Consumo Promedio</td>
-              <td>{stats.wad.avgConsumption.toFixed(2)}% / min</td>
-              <td>{stats.lightSource.avgConsumption.toFixed(2)}% / min</td>
+              <td style={{ backgroundColor: '#e3f2fd' }}>{stats.wad.avgConsumption.toFixed(2)}% / min</td>
+              <td style={{ backgroundColor: '#fff9c4' }}>{stats.lightSource.avgConsumption.toFixed(2)}% / min</td>
             </tr>
             <tr>
               <td>Estimación Máxima</td>
-              <td>{stats.wad.maxDurationEstimate} min</td>
-              <td>{stats.lightSource.maxDurationEstimate} min</td>
+              <td style={{ backgroundColor: '#e3f2fd' }}>{stats.wad.maxDurationEstimate} min</td>
+              <td style={{ backgroundColor: '#fff9c4' }}>{stats.lightSource.maxDurationEstimate} min</td>
             </tr>
             <tr>
               <td>Estimación Mínima</td>
-              <td>{stats.wad.minDurationEstimate} min</td>
-              <td>{stats.lightSource.minDurationEstimate} min</td>
+              <td style={{ backgroundColor: '#e3f2fd' }}>{stats.wad.minDurationEstimate} min</td>
+              <td style={{ backgroundColor: '#fff9c4' }}>{stats.lightSource.minDurationEstimate} min</td>
             </tr>
           </tbody>
         </table>
@@ -1279,8 +1270,14 @@ ${notes}
 
       <h3 className="section-title">📊 Análisis de Baterías</h3>
       <div className="charts-grid">
-        {analysisCharts.map(chart => (
-          <div key={chart.id} className="chart-card">
+        {analysisCharts.map(chart => {
+          // Determinar color de fondo según el dispositivo
+          const isWADChart = ['wadAccuracy', 'wadBatteryVsEstimate', 'qualityImpact'].includes(chart.id)
+          const isLSChart = ['lsAccuracy', 'lsBatteryVsEstimate', 'intensityImpact'].includes(chart.id)
+          const backgroundColor = isWADChart ? '#f3f9fd' : isLSChart ? '#fffde7' : 'white'
+          
+          return (
+          <div key={chart.id} className="chart-card" style={{ backgroundColor }}>
             <div className="chart-header">
               <div className="chart-title-group">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -1305,7 +1302,8 @@ ${notes}
               <Line data={chart.data} options={chart.options} />
             </div>
           </div>
-        ))}
+          )
+        })}
         
         <div className="chart-card">
           <div className="chart-header">
@@ -1334,7 +1332,7 @@ ${notes}
           <h3 className="section-title">⚡ Métricas Técnicas ADB del WAD</h3>
           <div className="charts-grid">
         {adbMetricsCharts.map(chart => (
-          <div key={chart.id} className="chart-card">
+          <div key={chart.id} className="chart-card" style={{ backgroundColor: '#f3f9fd' }}>
             <div className="chart-header">
               <div className="chart-title-group">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>

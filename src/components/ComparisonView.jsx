@@ -37,6 +37,34 @@ ChartJS.register(
   Legend
 )
 
+// Plugin para mostrar valores sobre las barras
+const barValuesPlugin = {
+  id: 'barValues',
+  afterDatasetsDraw(chart) {
+    const ctx = chart.ctx
+    
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      const meta = chart.getDatasetMeta(datasetIndex)
+      
+      // Solo mostrar valores en las barras (no en las líneas)
+      if (dataset.type !== 'line' && !meta.hidden) {
+        meta.data.forEach((bar, index) => {
+          const value = dataset.data[index]
+          if (value > 0) {
+            ctx.save()
+            ctx.fillStyle = '#333'
+            ctx.font = 'bold 11px Arial'
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'bottom'
+            ctx.fillText(value.toFixed(1), bar.x, bar.y - 5)
+            ctx.restore()
+          }
+        })
+      }
+    })
+  }
+}
+
 function ComparisonView({ sessions }) {
   // Normalize all sessions to the same time scale (percentage of total duration)
   const normalizedData = sessions.map((session, idx) => {
@@ -95,21 +123,30 @@ function ComparisonView({ sessions }) {
         type: 'line',
         label: 'Mínimo',
         data: Array(durationComparisonData.length).fill(minWadDuration),
-        borderColor: 'rgb(231, 76, 60)',
+        borderColor: 'rgba(231, 76, 60, 0.5)',
         borderWidth: 2,
         borderDash: [5, 5],
         pointRadius: 0,
-        fill: false
+        fill: false,
+        hidden: true
       },
       {
         type: 'line',
         label: 'Máximo',
         data: Array(durationComparisonData.length).fill(maxWadDuration),
-        borderColor: 'rgb(46, 204, 113)',
+        borderColor: 'rgba(46, 204, 113, 0.5)',
         borderWidth: 2,
         borderDash: [5, 5],
         pointRadius: 0,
-        fill: false
+        fill: false,
+        hidden: true
+      },
+      {
+        type: 'line',
+        label: `Diferencia Máx-Mín: ${(maxWadDuration - minWadDuration).toFixed(1)} min`,
+        data: [],
+        borderWidth: 0,
+        pointRadius: 0
       }
     ]
   }
@@ -128,21 +165,30 @@ function ComparisonView({ sessions }) {
         type: 'line',
         label: 'Mínimo',
         data: Array(durationComparisonData.length).fill(minLsDuration),
-        borderColor: 'rgb(231, 76, 60)',
+        borderColor: 'rgba(231, 76, 60, 0.5)',
         borderWidth: 2,
         borderDash: [5, 5],
         pointRadius: 0,
-        fill: false
+        fill: false,
+        hidden: true
       },
       {
         type: 'line',
         label: 'Máximo',
         data: Array(durationComparisonData.length).fill(maxLsDuration),
-        borderColor: 'rgb(46, 204, 113)',
+        borderColor: 'rgba(46, 204, 113, 0.5)',
         borderWidth: 2,
         borderDash: [5, 5],
         pointRadius: 0,
-        fill: false
+        fill: false,
+        hidden: true
+      },
+      {
+        type: 'line',
+        label: `Diferencia Máx-Mín: ${(maxLsDuration - minLsDuration).toFixed(1)} min`,
+        data: [],
+        borderWidth: 0,
+        pointRadius: 0
       }
     ]
   }
@@ -150,6 +196,9 @@ function ComparisonView({ sessions }) {
   const durationOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    hover: {
+      mode: null  // Desactivar completamente el hover
+    },
     plugins: {
       legend: {
         display: true,
@@ -159,17 +208,22 @@ function ComparisonView({ sessions }) {
           padding: 15,
           font: {
             size: 12
+          },
+          generateLabels: function(chart) {
+            const original = ChartJS.defaults.plugins.legend.labels.generateLabels
+            const labels = original.call(this, chart)
+            
+            // Forzar círculos para todos los datasets
+            labels.forEach(label => {
+              label.pointStyle = 'circle'
+            })
+            
+            return labels
           }
         }
       },
       tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        padding: 12,
-        callbacks: {
-          label: function(context) {
-            return `${context.dataset.label}: ${context.parsed.y.toFixed(1)} minutos`
-          }
-        }
+        enabled: false  // Desactivar tooltip ya que el valor está visible en las barras
       }
     },
     scales: {
@@ -208,30 +262,6 @@ function ComparisonView({ sessions }) {
         grid: {
           display: false
         }
-      }
-    },
-    animation: {
-      onComplete: function(animation) {
-        const chart = animation.chart
-        const ctx = chart.ctx
-        
-        chart.data.datasets.forEach((dataset, datasetIndex) => {
-          const meta = chart.getDatasetMeta(datasetIndex)
-          
-          // Solo mostrar valores en las barras (no en las líneas)
-          if (dataset.type !== 'line') {
-            meta.data.forEach((bar, index) => {
-              const value = dataset.data[index]
-              if (value > 0) {
-                ctx.fillStyle = '#333'
-                ctx.font = 'bold 11px Arial'
-                ctx.textAlign = 'center'
-                ctx.textBaseline = 'bottom'
-                ctx.fillText(value.toFixed(1), bar.x, bar.y - 5)
-              }
-            })
-          }
-        })
       }
     }
   }
@@ -427,29 +457,29 @@ function ComparisonView({ sessions }) {
       
       {/* Gráficas de Duración de Dispositivos */}
       <div className="comparison-charts">
-        <div className="comparison-chart">
+        <div className="comparison-chart" style={{ backgroundColor: '#f3f9fd' }}>
           <div className="chart-header">
             <h3>Duración WAD</h3>
             <ChartTooltip text="Compara la duración de funcionamiento del dispositivo WAD en cada cirugía. Las líneas discontinuas muestran el valor mínimo (rojo) y máximo (verde) entre todas las sesiones." />
           </div>
           <div className="chart-container">
-            <Bar data={wadDurationChartData} options={durationOptions} />
+            <Bar data={wadDurationChartData} options={durationOptions} plugins={[barValuesPlugin]} />
           </div>
         </div>
 
-        <div className="comparison-chart">
+        <div className="comparison-chart" style={{ backgroundColor: '#fffde7' }}>
           <div className="chart-header">
             <h3>Duración Light Source</h3>
             <ChartTooltip text="Compara la duración de funcionamiento del dispositivo Light Source en cada cirugía. Las líneas discontinuas muestran el valor mínimo (rojo) y máximo (verde) entre todas las sesiones." />
           </div>
           <div className="chart-container">
-            <Bar data={lsDurationChartData} options={durationOptions} />
+            <Bar data={lsDurationChartData} options={durationOptions} plugins={[barValuesPlugin]} />
           </div>
         </div>
       </div>
 
       <div className="comparison-charts">
-        <div className="comparison-chart">
+        <div className="comparison-chart" style={{ backgroundColor: '#f3f9fd' }}>
           <div className="chart-header">
             <h3>Comparación WAD Battery</h3>
             <ChartTooltip text="Compara el comportamiento de la batería WAD entre múltiples cirugías normalizadas al 0-100% del tiempo total. Permite identificar patrones consistentes o anomalías." />
@@ -459,7 +489,7 @@ function ComparisonView({ sessions }) {
           </div>
         </div>
 
-        <div className="comparison-chart">
+        <div className="comparison-chart" style={{ backgroundColor: '#fffde7' }}>
           <div className="chart-header">
             <h3>Comparación Light Source Battery</h3>
             <ChartTooltip text="Compara el consumo del Light Source entre sesiones. Útil para evaluar diferencias según configuración de intensidad o duración de cirugía." />
@@ -476,7 +506,7 @@ function ComparisonView({ sessions }) {
           <div className="comparison-charts">
             {/* Temperatura vs Batería */}
             {adbComparisonData.tempVsBattery && adbComparisonData.tempVsBattery.length > 0 && (
-              <div className="comparison-chart">
+              <div className="comparison-chart" style={{ backgroundColor: '#f3f9fd' }}>
                 <div className="chart-header">
                   <h3>Temperatura vs Batería</h3>
                   <ChartTooltip text="Compara la evolución de temperatura del WAD entre sesiones durante el consumo de batería." />
@@ -537,7 +567,7 @@ function ComparisonView({ sessions }) {
 
             {/* Consumo de Corriente */}
             {adbComparisonData.current && adbComparisonData.current.length > 0 && (
-              <div className="comparison-chart">
+              <div className="comparison-chart" style={{ backgroundColor: '#f3f9fd' }}>
                 <div className="chart-header">
                   <h3>Consumo de Corriente</h3>
                   <ChartTooltip text="Compara el consumo de corriente en mA entre sesiones durante la cirugía." />
@@ -574,7 +604,7 @@ function ComparisonView({ sessions }) {
 
             {/* Consumo de Potencia */}
             {adbComparisonData.power && adbComparisonData.power.length > 0 && (
-              <div className="comparison-chart">
+              <div className="comparison-chart" style={{ backgroundColor: '#f3f9fd' }}>
                 <div className="chart-header">
                   <h3>Consumo de Potencia</h3>
                   <ChartTooltip text="Compara el consumo de potencia calculado (V × I) en mW entre sesiones." />
@@ -611,7 +641,7 @@ function ComparisonView({ sessions }) {
 
             {/* Capacidad Reportada vs ADB */}
             {adbComparisonData.capacity && adbComparisonData.capacity.length > 0 && (
-              <div className="comparison-chart">
+              <div className="comparison-chart" style={{ backgroundColor: '#f3f9fd' }}>
                 <div className="chart-header">
                   <h3>Capacidad: Sistema vs ADB</h3>
                   <ChartTooltip text="Compara la capacidad reportada por el sistema versus la leída por ADB. Las diferencias indican problemas de calibración." />
@@ -670,15 +700,15 @@ function ComparisonView({ sessions }) {
             <tr>
               <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>Sesión</th>
               <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>Fecha</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>Duración</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>WAD Inicial</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>WAD Final</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>WAD Consumo</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>WAD Duración</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>LS Inicial</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>LS Final</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>LS Consumo</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>LS Duración</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#f8f9fa' }}>Hora de inicio</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>WAD Inicial</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>WAD Final</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>WAD Consumo</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>WAD Duración</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#fff9c4' }}>LS Inicial</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#fff9c4' }}>LS Final</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#fff9c4' }}>LS Consumo</th>
+              <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#fff9c4' }}>LS Duración</th>
             </tr>
           </thead>
           <tbody>
@@ -689,15 +719,15 @@ function ComparisonView({ sessions }) {
                 <tr key={idx}>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.customName || `Sesión ${sessions.length - idx}`}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.surgeryDate}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.duration} min</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.wadInitial}%</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.wadFinal}%</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.wadDrop?.toFixed(1)}%</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.duration > 0 ? `${session.summary.duration} min` : 'N/A'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.lightSourceInitial}%</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.lightSourceFinal}%</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.lightSourceDrop?.toFixed(1)}%</td>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{batteryStats?.lightSource?.realDuration > 0 ? `${batteryStats.lightSource.realDuration.toFixed(1)} min` : 'N/A'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.startTime || 'N/A'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>{session.summary.wadInitial}%</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>{session.summary.wadFinal}%</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>{session.summary.wadDrop?.toFixed(1)}%</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>{session.summary.duration > 0 ? `${session.summary.duration} min` : 'N/A'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#fff9c4' }}>{session.summary.lightSourceInitial}%</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#fff9c4' }}>{session.summary.lightSourceFinal}%</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#fff9c4' }}>{session.summary.lightSourceDrop?.toFixed(1)}%</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#fff9c4' }}>{batteryStats?.lightSource?.realDuration > 0 ? `${batteryStats.lightSource.realDuration.toFixed(1)} min` : 'N/A'}</td>
                 </tr>
               )
             })}
