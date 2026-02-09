@@ -1,31 +1,31 @@
 // ========== FASE 1: DETECCIÓN CORRECTA DEL FIN DE DISPOSITIVOS ==========
 
 /**
- * Encuentra el último bloque continuo de valores -1 y retorna el último índice válido
+ * Encuentra el último bloque continuo de valores negativos y retorna el último índice válido
  * antes de ese bloque final. 
- * IMPORTANTE: Un valor -1 indica apagado. Un valor 0 es válido (0% batería o intensidad 0).
+ * IMPORTANTE: Un valor negativo indica apagado. Un valor 0 o positivo es válido.
  */
 const findLastValidIndex = (data, field) => {
   const values = data.map(row => row[field])
   
-  // Buscar desde el final hacia atrás el primer valor que NO sea -1
+  // Buscar desde el final hacia atrás el primer valor que NO sea negativo
   for (let i = values.length - 1; i >= 0; i--) {
-    if (values[i] !== -1) {
+    if (values[i] >= 0) {
       return i
     }
   }
   
-  return -1 // Todo el array es -1
+  return -1 // Todo el array es negativo
 }
 
 /**
- * Encuentra el índice donde empieza el último bloque continuo de -1
+ * Encuentra el índice donde empieza el último bloque continuo de valores negativos
  */
 const findFinalShutdownIndex = (data, field) => {
   const lastValidIdx = findLastValidIndex(data, field)
   
-  if (lastValidIdx < 0) return 0 // Todo es -1
-  if (lastValidIdx === data.length - 1) return data.length // No hay bloque final de -1
+  if (lastValidIdx < 0) return 0 // Todo es negativo
+  if (lastValidIdx === data.length - 1) return data.length // No hay bloque final negativo
   
   return lastValidIdx + 1 // El siguiente índice después del último válido
 }
@@ -33,7 +33,7 @@ const findFinalShutdownIndex = (data, field) => {
 // ========== FASE 2: SEPARAR DATOS POR DISPOSITIVO ==========
 
 /**
- * Retorna solo los datos válidos del WAD (hasta que batería < 0)
+ * Retorna solo los datos válidos del WAD (hasta que batería sea negativa)
  */
 export const getWADValidData = (data) => {
   const endIdx = findFinalShutdownIndex(data, 'WAD Battery %')
@@ -41,10 +41,10 @@ export const getWADValidData = (data) => {
 }
 
 /**
- * Retorna solo los datos válidos de la LS (hasta el último bloque continuo de intensidad -1)
+ * Retorna solo los datos válidos de la LS (hasta el último bloque continuo de intensidad negativa)
  * IMPORTANTE: Usa 'Light Source Intensity' para detectar el apagado final.
- * La intensidad = -1 indica dispositivo apagado. Se busca desde el final hacia atrás
- * para encontrar el último bloque continuo de -1 y excluirlo.
+ * La intensidad negativa indica dispositivo apagado. Se busca desde el final hacia atrás
+ * para encontrar el último bloque continuo de valores negativos y excluirlo.
  */
 export const getLSValidData = (data) => {
   const endIdx = findFinalShutdownIndex(data, 'Light Source Intensity')

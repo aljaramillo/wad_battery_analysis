@@ -83,7 +83,7 @@ function ComparisonView({ sessions }) {
       lsData: chartData.lightSourceBattery.filter((_, i) => i % step === 0).slice(0, sampleSize),
       color: getColorForSession(idx)
     }
-  }) // Mostrar más reciente primero
+  }).reverse() // Invertir para mostrar más antiguo primero
 
   const labels = Array.from({ length: 100 }, (_, i) => `${i}%`)
 
@@ -97,7 +97,7 @@ function ComparisonView({ sessions }) {
       lsDuration: stats.lightSource.realDuration,
       color: getColorForSession(idx)
     }
-  }) // Mostrar más reciente primero
+  }).reverse() // Invertir para mostrar más antiguo primero
 
   // Calcular mínimo y máximo para WAD
   const wadDurations = durationComparisonData.map(d => d.wadDuration)
@@ -277,7 +277,7 @@ function ComparisonView({ sessions }) {
     data: session.data,
     label: session.customName || session.summary.surgeryDate,
     firmware: session.summary.wadFirmware || 'N/A'
-  })) // Mostrar más reciente primero
+  })).reverse() // Invertir para mostrar más antiguo primero
 
   const hasAnyADBData = sessionsWithADB.some(s => s.hasADB)
 
@@ -421,7 +421,7 @@ function ComparisonView({ sessions }) {
       x: {
         title: {
           display: true,
-          text: `Progreso de Cirugía (%) | Duraciones: ${sessions.map(s => `${s.customName || s.summary.surgeryDate}: ${s.summary.duration}min`).join(' vs ')}`,
+          text: `Progreso de Cirugía (%) | Duraciones: ${sessions.slice().reverse().map(s => `${s.customName || s.summary.surgeryDate}: ${s.summary.duration}min`).join(' vs ')}`,
           font: {
             size: 13,
             weight: '500'
@@ -712,12 +712,12 @@ function ComparisonView({ sessions }) {
             </tr>
           </thead>
           <tbody>
-            {sessions.map((session, idx) => {
+            {sessions.slice().reverse().map((session, idx) => {
               const batteryStats = session.data ? calculateStatistics(session.data) : null
               
               return (
                 <tr key={idx}>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.customName || `Sesión ${idx + 1}`}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.customName || `Sesión ${sessions.length - idx}`}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.surgeryDate}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.startTime || 'N/A'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>{session.summary.wadInitial}%</td>
