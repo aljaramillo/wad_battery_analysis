@@ -126,8 +126,7 @@ function App() {
               <div className="sessions-list">
                 <h2>Sesiones Cargadas ({sessions.length})</h2>
                 <div className="sessions-grid">
-              {sessions.slice().reverse().map((session, displayIdx) => {
-                const idx = sessions.length - 1 - displayIdx // Índice real en el array original
+              {sessions.map((session, idx) => {
                 return (
                 <div 
                   key={idx} 

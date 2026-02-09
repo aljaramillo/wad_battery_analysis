@@ -41,12 +41,13 @@ export const getWADValidData = (data) => {
 }
 
 /**
- * Retorna solo los datos válidos de la LS (hasta el último bloque continuo de batería -1)
- * IMPORTANTE: Usa 'Light Source %' como criterio porque 'Light Source Intensity' 
- * puede dar valores como 5 incluso cuando el dispositivo está apagado
+ * Retorna solo los datos válidos de la LS (hasta el último bloque continuo de intensidad -1)
+ * IMPORTANTE: Usa 'Light Source Intensity' para detectar el apagado final.
+ * La intensidad = -1 indica dispositivo apagado. Se busca desde el final hacia atrás
+ * para encontrar el último bloque continuo de -1 y excluirlo.
  */
 export const getLSValidData = (data) => {
-  const endIdx = findFinalShutdownIndex(data, 'Light Source %')
+  const endIdx = findFinalShutdownIndex(data, 'Light Source Intensity')
   return data.slice(0, endIdx)
 }
 
