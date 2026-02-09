@@ -17,20 +17,20 @@ function App() {
       notes: session.summary.notes || session.notes || ''
     }))
     
-    // Ordenar por fecha (más antigua primero)
+    // Ordenar por fecha y hora (más antigua primero)
     sessionsWithNames.sort((a, b) => {
-      const dateA = new Date(a.summary.surgeryDate || 0)
-      const dateB = new Date(b.summary.surgeryDate || 0)
-      return dateA - dateB
+      const dateTimeA = new Date(`${a.summary.surgeryDate || '1/1/1970'} ${a.summary.startTime || '00:00:00'}`)
+      const dateTimeB = new Date(`${b.summary.surgeryDate || '1/1/1970'} ${b.summary.startTime || '00:00:00'}`)
+      return dateTimeA - dateTimeB
     })
     
     setSessions(prev => {
       const combined = [...prev, ...sessionsWithNames]
-      // Reordenar todo el array por fecha
+      // Reordenar todo el array por fecha y hora
       combined.sort((a, b) => {
-        const dateA = new Date(a.summary.surgeryDate || 0)
-        const dateB = new Date(b.summary.surgeryDate || 0)
-        return dateA - dateB
+        const dateTimeA = new Date(`${a.summary.surgeryDate || '1/1/1970'} ${a.summary.startTime || '00:00:00'}`)
+        const dateTimeB = new Date(`${b.summary.surgeryDate || '1/1/1970'} ${b.summary.startTime || '00:00:00'}`)
+        return dateTimeA - dateTimeB
       })
       return combined
     })
@@ -126,8 +126,7 @@ function App() {
               <div className="sessions-list">
                 <h2>Sesiones Cargadas ({sessions.length})</h2>
                 <div className="sessions-grid">
-              {sessions.slice().reverse().map((session, displayIdx) => {
-                const idx = sessions.length - 1 - displayIdx // Índice real en el array original
+              {sessions.map((session, idx) => {
                 return (
                 <div 
                   key={idx} 
