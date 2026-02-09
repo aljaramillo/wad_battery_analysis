@@ -19,6 +19,7 @@ import {
   analyzeTemperatureHeatmap
 } from '../utils/dataProcessor'
 import ChartTooltip from './ChartTooltip'
+import NotesEditor from './NotesEditor'
 import './StatisticsPanel.css'
 
 ChartJS.register(annotationPlugin)
@@ -1313,10 +1314,11 @@ ${notes}
             </div>
           </div>
           <div className="notes-container">
-            <textarea
+            <NotesEditor
               className="notes-textarea"
               value={session.notes || ''}
-              onChange={(e) => onNotesChange(e.target.value)}
+              onCommit={(text) => onNotesChange(text)}
+              onSave={(text) => onNotesChange(text)}
               placeholder="Añade tus observaciones técnicas sobre esta sesión: comportamiento anómalo, bugs detectados, mejoras sugeridas, etc..."
               rows={8}
             />
