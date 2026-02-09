@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Line } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -26,42 +27,45 @@ ChartJS.register(
 )
 
 function BatteryChart({ session }) {
-  const chartData = processChartData(session.data)
+  const data = useMemo(() => {
+    const chartData = processChartData(session.data)
 
-  // Sample data every 6 points (1 minute) to reduce clutter
-  const sampledIndices = chartData.labels
-    .map((_, idx) => idx)
-    .filter((_, idx) => idx % 6 === 0)
+    // Sample data every 6 points (1 minute) to reduce clutter
+    const sampledIndices = []
+    for (let i = 0; i < chartData.labels.length; i += 6) {
+      sampledIndices.push(i)
+    }
 
-  const data = {
-    labels: sampledIndices.map(i => chartData.labels[i]),
-    datasets: [
-      {
-        label: 'WAD Battery %',
-        data: sampledIndices.map(i => chartData.wadBattery[i]),
-        borderColor: '#667eea',
-        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        tension: 0.4,
-        fill: true
-      },
-      {
-        label: 'Light Source Battery %',
-        data: sampledIndices.map(i => chartData.lightSourceBattery[i]),
-        borderColor: '#f093fb',
-        backgroundColor: 'rgba(240, 147, 251, 0.1)',
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        tension: 0.4,
-        fill: true
-      }
-    ]
-  }
+    return {
+      labels: sampledIndices.map(i => chartData.labels[i]),
+      datasets: [
+        {
+          label: 'WAD Battery %',
+          data: sampledIndices.map(i => chartData.wadBattery[i]),
+          borderColor: '#667eea',
+          backgroundColor: 'rgba(102, 126, 234, 0.1)',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          tension: 0.4,
+          fill: true
+        },
+        {
+          label: 'Light Source Battery %',
+          data: sampledIndices.map(i => chartData.lightSourceBattery[i]),
+          borderColor: '#f093fb',
+          backgroundColor: 'rgba(240, 147, 251, 0.1)',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          tension: 0.4,
+          fill: true
+        }
+      ]
+    }
+  }, [session.data])
 
-  const options = {
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     interaction: {
@@ -141,7 +145,7 @@ function BatteryChart({ session }) {
         }
       }
     }
-  }
+  }), [])
 
   return (
     <div className="battery-chart">

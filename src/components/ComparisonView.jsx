@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Line, Scatter, Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -67,13 +68,13 @@ const barValuesPlugin = {
 
 function ComparisonView({ sessions }) {
   // Normalize all sessions to the same time scale (percentage of total duration)
-  const normalizedData = sessions.map((session, idx) => {
+  const normalizedData = useMemo(() => sessions.map((session, idx) => {
     const chartData = processChartData(session.data)
     const totalPoints = chartData.labels.length
     
     // Sample 100 points from each session for comparison
     const sampleSize = 100
-    const step = Math.floor(totalPoints / sampleSize)
+    const step = Math.max(1, Math.floor(totalPoints / sampleSize))
     
     const sessionLabel = session.customName || session.summary.surgeryDate
     
@@ -83,33 +84,42 @@ function ComparisonView({ sessions }) {
       lsData: chartData.lightSourceBattery.filter((_, i) => i % step === 0).slice(0, sampleSize),
       color: getColorForSession(idx)
     }
-  }) // Mostrar más reciente primero
+  }), [sessions])
 
-  const labels = Array.from({ length: 100 }, (_, i) => `${i}%`)
+  const labels = useMemo(() => Array.from({ length: 100 }, (_, i) => `${i}%`), [])
 
   // ========== PREPARAR DATOS DE TIEMPOS MÁXIMOS ==========
-  const durationComparisonData = sessions.map((session, idx) => {
-    const stats = calculateStatistics(session.data)
-    
+  const { 
+    durationComparisonData, 
+    minWadDuration, 
+    maxWadDuration, 
+    minLsDuration, 
+    maxLsDuration 
+  } = useMemo(() => {
+    const comparison = sessions.map((session, idx) => {
+      const stats = calculateStatistics(session.data)
+      
+      return {
+        label: session.customName || session.summary.surgeryDate,
+        wadDuration: session.summary.duration, // Usar duración de la cirugía
+        lsDuration: stats.lightSource.realDuration,
+        color: getColorForSession(idx)
+      }
+    })
+
+    const wadDurs = comparison.map(d => d.wadDuration)
+    const lsDurs = comparison.map(d => d.lsDuration)
+
     return {
-      label: session.customName || session.summary.surgeryDate,
-      wadDuration: session.summary.duration, // Usar duración de la cirugía
-      lsDuration: stats.lightSource.realDuration,
-      color: getColorForSession(idx)
+      durationComparisonData: comparison,
+      minWadDuration: Math.min(...wadDurs),
+      maxWadDuration: Math.max(...wadDurs),
+      minLsDuration: Math.min(...lsDurs),
+      maxLsDuration: Math.max(...lsDurs)
     }
-  }) // Mostrar más reciente primero
+  }, [sessions])
 
-  // Calcular mínimo y máximo para WAD
-  const wadDurations = durationComparisonData.map(d => d.wadDuration)
-  const minWadDuration = Math.min(...wadDurations)
-  const maxWadDuration = Math.max(...wadDurations)
-
-  // Calcular mínimo y máximo para LS
-  const lsDurations = durationComparisonData.map(d => d.lsDuration)
-  const minLsDuration = Math.min(...lsDurations)
-  const maxLsDuration = Math.max(...lsDurations)
-
-  const wadDurationChartData = {
+  const wadDurationChartData = useMemo(() => ({
     labels: durationComparisonData.map(d => d.label),
     datasets: [
       {
@@ -149,9 +159,9 @@ function ComparisonView({ sessions }) {
         pointRadius: 0
       }
     ]
-  }
+  }), [durationComparisonData, minWadDuration, maxWadDuration])
 
-  const lsDurationChartData = {
+  const lsDurationChartData = useMemo(() => ({
     labels: durationComparisonData.map(d => d.label),
     datasets: [
       {
@@ -191,9 +201,9 @@ function ComparisonView({ sessions }) {
         pointRadius: 0
       }
     ]
-  }
+  }), [durationComparisonData, minLsDuration, maxLsDuration])
 
-  const durationOptions = {
+  const durationOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     hover: {
@@ -264,11 +274,11 @@ function ComparisonView({ sessions }) {
         }
       }
     }
-  }
+  }), [])
 
   // ========== PREPARAR DATOS ADB COMPARATIVOS ==========
   // Verificar si las sesiones tienen datos ADB
-  const sessionsWithADB = sessions.map(session => ({
+  const sessionsWithADB = useMemo(() => sessions.map(session => ({
     hasADB: session.data.some(row => 
       row['WAD ADB Temp (0.1°C)'] !== undefined && 
       row['WAD ADB Temp (0.1°C)'] !== -1 &&
@@ -277,13 +287,14 @@ function ComparisonView({ sessions }) {
     data: session.data,
     label: session.customName || session.summary.surgeryDate,
     firmware: session.summary.wadFirmware || 'N/A'
-  })) // Mostrar más reciente primero
+  })), [sessions])
 
-  const hasAnyADBData = sessionsWithADB.some(s => s.hasADB)
+  const hasAnyADBData = useMemo(() => sessionsWithADB.some(s => s.hasADB), [sessionsWithADB])
 
   // Preparar datos ADB si hay al menos una sesión con datos ADB
-  let adbComparisonData = {}
-  if (hasAnyADBData) {
+  const adbComparisonData = useMemo(() => {
+    if (!hasAnyADBData) return {}
+
     // 1. Temperatura vs Batería
     const tempDataBySession = sessionsWithADB.map((s, idx) => {
       if (!s.hasADB) return null
@@ -338,17 +349,17 @@ function ComparisonView({ sessions }) {
       }
     }).filter(Boolean)
 
-    adbComparisonData = {
+    return {
       tempVsBattery: tempDataBySession,
       current: currentDataBySession,
       power: powerDataBySession,
       capacity: capacityDataBySession
     }
-  }
+  }, [hasAnyADBData, sessionsWithADB])
 
-  const wadComparisonData = {
+  const wadComparisonData = useMemo(() => ({
     labels,
-    datasets: normalizedData.map((session, idx) => ({
+    datasets: normalizedData.map((session) => ({
       label: session.label,
       data: session.wadData,
       borderColor: session.color,
@@ -358,11 +369,11 @@ function ComparisonView({ sessions }) {
       pointHoverRadius: 4,
       tension: 0.4
     }))
-  }
+  }), [labels, normalizedData])
 
-  const lsComparisonData = {
+  const lsComparisonData = useMemo(() => ({
     labels,
-    datasets: normalizedData.map((session, idx) => ({
+    datasets: normalizedData.map((session) => ({
       label: session.label,
       data: session.lsData,
       borderColor: session.color,
@@ -372,9 +383,9 @@ function ComparisonView({ sessions }) {
       pointHoverRadius: 4,
       tension: 0.4
     }))
-  }
+  }), [labels, normalizedData])
 
-  const options = {
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     interaction: {
@@ -449,7 +460,7 @@ function ComparisonView({ sessions }) {
         }
       }
     }
-  }
+  }), [sessions])
 
   return (
     <div className="comparison-view">
@@ -712,12 +723,12 @@ function ComparisonView({ sessions }) {
             </tr>
           </thead>
           <tbody>
-            {sessions.slice().reverse().map((session, idx) => {
+            {useMemo(() => sessions.slice().reverse().map((session, idx) => {
               const batteryStats = session.data ? calculateStatistics(session.data) : null
               
               return (
-                <tr key={idx}>
-                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.customName || `Sesión ${idx + 1}`}</td>
+                <tr key={session.summary.surgeryDate + idx}>
+                  <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.customName || `Sesión ${sessions.length - idx}`}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.surgeryDate}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center' }}>{session.summary.startTime || 'N/A'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#e3f2fd' }}>{session.summary.wadInitial}%</td>
@@ -730,7 +741,7 @@ function ComparisonView({ sessions }) {
                   <td style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'center', backgroundColor: '#fff9c4' }}>{batteryStats?.lightSource?.realDuration > 0 ? `${batteryStats.lightSource.realDuration.toFixed(1)} min` : 'N/A'}</td>
                 </tr>
               )
-            })}
+            }), [sessions])}
           </tbody>
         </table>
       </div>

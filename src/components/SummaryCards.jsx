@@ -1,39 +1,44 @@
+import { useMemo } from 'react'
 import './SummaryCards.css'
 
 function SummaryCards({ sessions }) {
+  const cards = useMemo(() => {
+    if (sessions.length === 0) return []
+
+    const session = sessions[0]
+    const summary = session.summary
+
+    return [
+      {
+        title: 'Duración Total',
+        value: `${summary.duration} min`,
+        icon: '⏱️',
+        color: '#667eea'
+      },
+      {
+        title: 'WAD Consumo',
+        value: `${summary.wadDrop?.toFixed(1)}%`,
+        subtitle: `${summary.wadAvgConsumption?.toFixed(2)}% / min`,
+        icon: '🔋',
+        color: '#f093fb'
+      },
+      {
+        title: 'Light Source Consumo',
+        value: `${summary.lightSourceDrop?.toFixed(1)}%`,
+        subtitle: `${summary.lightSourceAvgConsumption?.toFixed(2)}% / min`,
+        icon: '💡',
+        color: '#4facfe'
+      },
+      {
+        title: 'Mediciones',
+        value: summary.totalMeasurements || session.data.length,
+        icon: '📊',
+        color: '#43e97b'
+      }
+    ]
+  }, [sessions])
+
   if (sessions.length === 0) return null
-
-  const session = sessions[0]
-  const summary = session.summary
-
-  const cards = [
-    {
-      title: 'Duración Total',
-      value: `${summary.duration} min`,
-      icon: '⏱️',
-      color: '#667eea'
-    },
-    {
-      title: 'WAD Consumo',
-      value: `${summary.wadDrop?.toFixed(1)}%`,
-      subtitle: `${summary.wadAvgConsumption?.toFixed(2)}% / min`,
-      icon: '🔋',
-      color: '#f093fb'
-    },
-    {
-      title: 'Light Source Consumo',
-      value: `${summary.lightSourceDrop?.toFixed(1)}%`,
-      subtitle: `${summary.lightSourceAvgConsumption?.toFixed(2)}% / min`,
-      icon: '💡',
-      color: '#4facfe'
-    },
-    {
-      title: 'Mediciones',
-      value: summary.totalMeasurements || session.data.length,
-      icon: '📊',
-      color: '#43e97b'
-    }
-  ]
 
   return (
     <div className="summary-cards">

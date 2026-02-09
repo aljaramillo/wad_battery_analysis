@@ -1,21 +1,23 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import './DataTable.css'
 
 function DataTable({ session }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
-  if (!session || !session.data || session.data.length === 0) {
+  const data = session?.data || []
+  const columns = useMemo(() => (data.length > 0 ? Object.keys(data[0]) : []), [data])
+
+  const sessionTitle = useMemo(() => 
+    session?.customName || session?.summary?.surgeryDate || 'Sesión'
+  , [session])
+
+  if (!session || !data.length) {
     return null
   }
 
-  const data = session.data
-  const columns = Object.keys(data[0])
-
   const handleToggle = () => {
-    setIsExpanded(!isExpanded)
+    setIsExpanded(prev => !prev)
   }
-
-  const sessionTitle = session.customName || session.summary?.surgeryDate || 'Sesión'
   
   return (
     <div className="data-table-container">
@@ -37,24 +39,23 @@ function DataTable({ session }) {
               <thead>
                 <tr>
                   <th className="row-number">#</th>
-                  {columns.map((col, idx) => (
-                    <th key={idx}>{col}</th>
+                  {columns.map((col) => (
+                    <th key={col}>{col}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {data.map((row, rowIdx) => (
-                  <tr key={rowIdx}>
+                  <tr key={rowIdx} className="table-row-optimized">
                     <td className="row-number">{rowIdx + 1}</td>
-                    {columns.map((col, colIdx) => {
+                    {columns.map((col) => {
                       const value = row[col]
-                      // Convertir cualquier valor a string para evitar errores con objetos
                       const displayValue = value === null || value === undefined 
                         ? '' 
                         : typeof value === 'object' 
                           ? JSON.stringify(value) 
                           : String(value)
-                      return <td key={colIdx}>{displayValue}</td>
+                      return <td key={col}>{displayValue}</td>
                     })}
                   </tr>
                 ))}

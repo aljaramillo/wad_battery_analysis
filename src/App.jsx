@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import FileUploader from './components/FileUploader'
 import ComparisonView from './components/ComparisonView'
 import StatisticsPanel from './components/StatisticsPanel'
@@ -10,7 +10,7 @@ function App() {
   const [selectedSessions, setSelectedSessions] = useState([])
   const [draggedIndex, setDraggedIndex] = useState(null)
 
-  const handleFilesLoaded = (newSessions) => {
+  const handleFilesLoaded = useCallback((newSessions) => {
     const sessionsWithNames = newSessions.map(session => ({
       ...session,
       customName: session.summary.customName || session.customName || session.id || '',
@@ -39,42 +39,42 @@ function App() {
       const newIndices = sessionsWithNames.map((_, idx) => sessions.length + idx)
       return [...prev, ...newIndices]
     })
-  }
+  }, [sessions.length])
 
-  const handleSessionNameChange = (index, newName) => {
+  const handleSessionNameChange = useCallback((index, newName) => {
     setSessions(prev => prev.map((session, idx) => 
       idx === index ? { ...session, customName: newName } : session
     ))
-  }
+  }, [])
 
-  const handleNotesChange = (index, newNotes) => {
+  const handleNotesChange = useCallback((index, newNotes) => {
     setSessions(prev => prev.map((session, idx) => 
       idx === index ? { ...session, notes: newNotes } : session
     ))
-  }
+  }, [])
 
-  const handleSessionToggle = (index) => {
+  const handleSessionToggle = useCallback((index) => {
     setSelectedSessions(prev => 
       prev.includes(index) 
         ? prev.filter(i => i !== index)
         : [...prev, index]
     )
-  }
+  }, [])
 
-  const handleRemoveSession = (index) => {
+  const handleRemoveSession = useCallback((index) => {
     setSessions(prev => prev.filter((_, i) => i !== index))
     setSelectedSessions(prev => prev.filter(i => i !== index).map(i => i > index ? i - 1 : i))
-  }
+  }, [])
 
-  const handleDragStart = (index) => {
+  const handleDragStart = useCallback((index) => {
     setDraggedIndex(index)
-  }
+  }, [])
 
-  const handleDragOver = (e) => {
+  const handleDragOver = useCallback((e) => {
     e.preventDefault() // Necesario para permitir el drop
-  }
+  }, [])
 
-  const handleDrop = (targetIndex) => {
+  const handleDrop = useCallback((targetIndex) => {
     if (draggedIndex === null || draggedIndex === targetIndex) return
 
     // Reordenar el array de sesiones
@@ -97,16 +97,16 @@ function App() {
     })
     setSelectedSessions(newSelectedSessions)
     setDraggedIndex(null)
-  }
+  }, [draggedIndex, sessions, selectedSessions])
 
-  const handleDragEnd = () => {
+  const handleDragEnd = useCallback(() => {
     setDraggedIndex(null)
-  }
+  }, [])
 
   // Mantener el orden de las sesiones (no el orden de selección)
-  const selectedSessionsData = sessions
+  const selectedSessionsData = useMemo(() => sessions
     .map((session, idx) => selectedSessions.includes(idx) ? session : null)
-    .filter(Boolean)
+    .filter(Boolean), [sessions, selectedSessions])
 
   return (
     <div className="app">

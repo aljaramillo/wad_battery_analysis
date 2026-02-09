@@ -92,6 +92,11 @@
   overflow-y: auto;
 }
 
+.table-row-optimized {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 40px;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;

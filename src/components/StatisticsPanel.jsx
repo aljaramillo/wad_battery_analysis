@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Line, Scatter } from 'react-chartjs-2'
 import { Chart as ChartJS } from 'chart.js'
 import annotationPlugin from 'chartjs-plugin-annotation'
@@ -25,86 +26,56 @@ import './StatisticsPanel.css'
 ChartJS.register(annotationPlugin)
 
 function StatisticsPanel({ session, onNotesChange }) {
-  const stats = calculateStatistics(session.data)
+  const stats = useMemo(() => calculateStatistics(session.data), [session.data])
   
   // Obtener datos válidos para cada dispositivo PRIMERO
-  const wadValidData = getWADValidData(session.data)
-  const lsValidData = getLSValidData(session.data)
-  
-  // DEBUG: Ver cuántos datos tenemos
-  console.log('📊 DEBUG - Longitudes de datos:')
-  console.log('- Total datos:', session.data.length)
-  console.log('- WAD válidos:', wadValidData.length)
-  console.log('- LS válidos:', lsValidData.length)
-  console.log('- Último WAD Battery %:', session.data[session.data.length - 1]['WAD Battery %'])
-  console.log('- Último LS Intensity:', session.data[session.data.length - 1]['Light Source Intensity'])
-  
-  // DEBUG: Ver últimas 5 filas de WAD
-  console.log('📊 DEBUG - Últimas 5 filas de WAD válidas:')
-  for (let i = Math.max(0, wadValidData.length - 5); i < wadValidData.length; i++) {
-    console.log(`  [${i}] Battery: ${wadValidData[i]['WAD Battery %']}, Duration: ${wadValidData[i]['WAD Duration (min)']}`)
-  }
+  const wadValidData = useMemo(() => getWADValidData(session.data), [session.data])
+  const lsValidData = useMemo(() => getLSValidData(session.data), [session.data])
   
   // Análisis de precisión separado por dispositivo - USAR DATOS FILTRADOS
-  const wadAccuracyData = analyzeWADAccuracy(wadValidData)
-  const lsAccuracyData = analyzeLSAccuracy(lsValidData)
-  
-  console.log('📊 DEBUG - Accuracy Data:')
-  console.log('- wadAccuracyData.length:', wadAccuracyData.length)
-  console.log('- lsAccuracyData.length:', lsAccuracyData.length)
-  console.log('- Último tiempo WAD accuracy:', wadAccuracyData[wadAccuracyData.length - 1]?.time)
-  console.log('- Último tiempo LS accuracy:', lsAccuracyData[lsAccuracyData.length - 1]?.time)
+  const wadAccuracyData = useMemo(() => analyzeWADAccuracy(wadValidData), [wadValidData])
+  const lsAccuracyData = useMemo(() => analyzeLSAccuracy(lsValidData), [lsValidData])
   
   // Datos de gráficas (completos, para uso general)
-  const chartData = processChartData(session.data)
+  const chartData = useMemo(() => processChartData(session.data), [session.data])
 
   // Sample data (every minute) - SEPARADO POR DISPOSITIVO
-  const wadAccuracyTemp = wadAccuracyData.filter((_, idx) => idx % 6 === 0)
-  const sampledWadAccuracy = wadAccuracyTemp[wadAccuracyTemp.length - 1] === wadAccuracyData.length - 1
-    ? wadAccuracyTemp
-    : [...wadAccuracyTemp, wadAccuracyData[wadAccuracyData.length - 1]]
+  const sampledWadAccuracy = useMemo(() => {
+    const temp = wadAccuracyData.filter((_, idx) => idx % 6 === 0)
+    return temp[temp.length - 1] === wadAccuracyData.length - 1
+      ? temp
+      : [...temp, wadAccuracyData[wadAccuracyData.length - 1]]
+  }, [wadAccuracyData])
     
-  const lsAccuracyTemp = lsAccuracyData.filter((_, idx) => idx % 6 === 0)
-  const sampledLsAccuracy = lsAccuracyTemp[lsAccuracyTemp.length - 1] === lsAccuracyData.length - 1
-    ? lsAccuracyTemp
-    : [...lsAccuracyTemp, lsAccuracyData[lsAccuracyData.length - 1]]
-
-  console.log('📊 DEBUG - Sampled Accuracy:')
-  console.log('- sampledWadAccuracy.length:', sampledWadAccuracy.length)
-  console.log('- sampledLsAccuracy.length:', sampledLsAccuracy.length)
-  console.log('- Último tiempo WAD sampled:', sampledWadAccuracy[sampledWadAccuracy.length - 1]?.time)
-  console.log('- Último tiempo LS sampled:', sampledLsAccuracy[sampledLsAccuracy.length - 1]?.time)
+  const sampledLsAccuracy = useMemo(() => {
+    const temp = lsAccuracyData.filter((_, idx) => idx % 6 === 0)
+    return temp[temp.length - 1] === lsAccuracyData.length - 1
+      ? temp
+      : [...temp, lsAccuracyData[lsAccuracyData.length - 1]]
+  }, [lsAccuracyData])
   
   // Indices para gráficas que usan datos completos (estos se filtrarán después)
-  const sampledIndices = chartData.labels.map((_, idx) => idx).filter((_, idx) => idx % 6 === 0)
+  const sampledIndices = useMemo(() => chartData.labels.map((_, idx) => idx).filter((_, idx) => idx % 6 === 0), [chartData])
   
   // Crear datos procesados solo para el rango válido de LS
-  const lsChartData = processChartData(lsValidData)
-  const lsSampledTemp = lsChartData.labels.map((_, idx) => idx).filter((_, idx) => idx % 6 === 0)
-  const sampledLsIndices = lsSampledTemp[lsSampledTemp.length - 1] === lsChartData.labels.length - 1 
-    ? lsSampledTemp 
-    : [...lsSampledTemp, lsChartData.labels.length - 1]
+  const lsChartData = useMemo(() => processChartData(lsValidData), [lsValidData])
+  const sampledLsIndices = useMemo(() => {
+    const temp = lsChartData.labels.map((_, idx) => idx).filter((_, idx) => idx % 6 === 0)
+    return temp[temp.length - 1] === lsChartData.labels.length - 1 
+      ? temp 
+      : [...temp, lsChartData.labels.length - 1]
+  }, [lsChartData])
 
-  console.log('📊 DEBUG - LS Chart Data:')
-  console.log('- lsChartData.labels.length:', lsChartData.labels.length)
-  console.log('- sampledLsIndices.length:', sampledLsIndices.length)
-  console.log('- Último label LS:', lsChartData.labels[lsChartData.labels.length - 1])
-  console.log('- Último sampledLsIndex:', sampledLsIndices[sampledLsIndices.length - 1])
-  
   // Crear datos procesados solo para el rango válido de WAD
-  const wadChartData = processChartData(wadValidData)
-  const wadSampledTemp = wadChartData.labels.map((_, idx) => idx).filter((_, idx) => idx % 6 === 0)
-  const sampledWadIndices = wadSampledTemp[wadSampledTemp.length - 1] === wadChartData.labels.length - 1 
-    ? wadSampledTemp 
-    : [...wadSampledTemp, wadChartData.labels.length - 1]
+  const wadChartData = useMemo(() => processChartData(wadValidData), [wadValidData])
+  const sampledWadIndices = useMemo(() => {
+    const temp = wadChartData.labels.map((_, idx) => idx).filter((_, idx) => idx % 6 === 0)
+    return temp[temp.length - 1] === wadChartData.labels.length - 1 
+      ? temp 
+      : [...temp, wadChartData.labels.length - 1]
+  }, [wadChartData])
 
-  console.log('📊 DEBUG - WAD Chart Data:')
-  console.log('- wadChartData.labels.length:', wadChartData.labels.length)
-  console.log('- sampledWadIndices.length:', sampledWadIndices.length)
-  console.log('- Último label WAD:', wadChartData.labels[wadChartData.labels.length - 1])
-  console.log('- Último sampledWadIndex:', sampledWadIndices[sampledWadIndices.length - 1])
-
-  const chartOptions = {
+  const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     interaction: {
@@ -184,10 +155,10 @@ function StatisticsPanel({ session, onNotesChange }) {
         grid: { display: false }
       }
     }
-  }
+  }), [])
 
   // WAD Accuracy Chart - USA SOLO DATOS DE WAD
-  const wadAccuracyChartData = {
+  const wadAccuracyChartData = useMemo(() => ({
     labels: sampledWadAccuracy.map(d => d.time),
     datasets: [
       {
@@ -226,10 +197,10 @@ function StatisticsPanel({ session, onNotesChange }) {
         spanGaps: false
       }
     ]
-  }
+  }), [sampledWadAccuracy])
 
   // Light Source Accuracy Chart - USA SOLO DATOS DE LS
-  const lsAccuracyChartData = {
+  const lsAccuracyChartData = useMemo(() => ({
     labels: sampledLsAccuracy.map(d => d.time),
     datasets: [
       {
@@ -268,10 +239,10 @@ function StatisticsPanel({ session, onNotesChange }) {
         spanGaps: false
       }
     ]
-  }
+  }), [sampledLsAccuracy])
 
   // Comparison Chart
-  const comparisonData = {
+  const comparisonData = useMemo(() => ({
     labels: sampledIndices.map(i => chartData.labels[i]),
     datasets: [
       {
@@ -295,7 +266,7 @@ function StatisticsPanel({ session, onNotesChange }) {
         spanGaps: false
       }
     ]
-  }
+  }), [sampledIndices, chartData])
 
   // Discharge Rate Chart - SEPARADO POR DISPOSITIVO
   const wadDischargeRates = sampledWadIndices.map((idx, i) => {
