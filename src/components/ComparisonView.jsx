@@ -14,6 +14,8 @@ import {
 import { 
   processChartData, 
   getColorForSession,
+  getWADValidData,
+  getLSValidData,
   analyzeTemperatureVsUsage,
   analyzeCurrentConsumption,
   analyzeVoltageDegradation,
@@ -66,27 +68,85 @@ const barValuesPlugin = {
   }
 }
 
+const MAIN_SAMPLES = 100
+
+// Plugin para sombrear el último tramo (≤1%) en la comparativa WAD
+const shadeTailPlugin = {
+  id: 'shadeTail',
+  afterDraw(chart) {
+    const markers = chart.options._verticalMarkers
+    if (!markers || !markers.length) return
+    const { ctx, chartArea, scales } = chart
+    if (!scales.x || !chartArea) return
+    markers.forEach(({ index, color, label }) => {
+      if (index === null || index === undefined) return
+      const xPixel = scales.x.getPixelForValue(index)
+      if (xPixel < chartArea.left || xPixel > chartArea.right) return
+      ctx.save()
+      ctx.strokeStyle = color
+      ctx.lineWidth = 2
+      ctx.setLineDash([6, 3])
+      ctx.globalAlpha = 0.85
+      ctx.beginPath()
+      ctx.moveTo(xPixel, chartArea.top)
+      ctx.lineTo(xPixel, chartArea.bottom)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.globalAlpha = 1
+      ctx.fillStyle = color
+      ctx.font = 'bold 10px Arial'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'top'
+      ctx.fillText(label, xPixel, chartArea.top + 4)
+      ctx.restore()
+    })
+  }
+}
+
 function ComparisonView({ sessions }) {
-  // Normalize all sessions to the same time scale (percentage of total duration)
+  // Muestrea N puntos de un array incluyendo siempre el primero y el último,
+  // con índices proporcionales. Garantiza que el final del array siempre esté
+  // representado independientemente del tamaño del array.
+  const sampleEvenly = (arr, n) => {
+    if (arr.length === 0) return []
+    if (arr.length <= n) return arr.map(v => v < 0 ? null : v)
+    return Array.from({ length: n }, (_, i) => {
+      const idx = Math.round(i * (arr.length - 1) / (n - 1))
+      const v = arr[idx]
+      return v < 0 ? null : v
+    })
+  }
+
   const normalizedData = useMemo(() => sessions.map((session, idx) => {
-    const chartData = processChartData(session.data)
-    const totalPoints = chartData.labels.length
-    
-    // Sample 100 points from each session for comparison
-    const sampleSize = 100
-    const step = Math.max(1, Math.floor(totalPoints / sampleSize))
-    
+    // Para WAD: 0-100% = duración completa activa del WAD
+    // Usando sampleEvenly: el último punto SIEMPRE es el último registro,
+    // así la cola plana al 1% queda bien representada al final de la curva.
+    const wadValidData = getWADValidData(session.data)
+    const wadAllValues = wadValidData.map(row => row['WAD Battery %'])
+    const wadSampled = sampleEvenly(wadAllValues, MAIN_SAMPLES)
+
+    const lastAboveOneRaw = wadAllValues.findLastIndex(v => v > 1)
+    const wadTailDurationMin = lastAboveOneRaw >= 0 && lastAboveOneRaw < wadAllValues.length - 1
+      ? Math.round((wadAllValues.length - (lastAboveOneRaw + 1)) / 6)
+      : 0
+    const wadTotalMin = Math.round(wadValidData.length / 6)
+
+    const lsValidData = getLSValidData(session.data)
+    const lsAllValues = lsValidData.map(row => row['Light Source %'])
+    const lsSampled = sampleEvenly(lsAllValues, MAIN_SAMPLES)
+
     const sessionLabel = session.customName || session.summary.surgeryDate
-    
+
     return {
-      label: `${sessionLabel} (${session.summary.duration}min)`,
-      wadData: chartData.wadBattery.filter((_, i) => i % step === 0).slice(0, sampleSize),
-      lsData: chartData.lightSourceBattery.filter((_, i) => i % step === 0).slice(0, sampleSize),
+      label: sessionLabel + ' (' + wadTotalMin + 'min' + (wadTailDurationMin > 0 ? ', cola \u22641%: ' + wadTailDurationMin + 'min' : '') + ')',
+      wadData: wadSampled,
+      wadTailDurationMin,
+      lsData: lsSampled,
       color: getColorForSession(idx)
     }
   }), [sessions])
 
-  const labels = useMemo(() => Array.from({ length: 100 }, (_, i) => `${i}%`), [])
+  const labels = useMemo(() => Array.from({ length: MAIN_SAMPLES }, (_, i) => `${i}%`), [])
 
   // ========== PREPARAR DATOS DE TIEMPOS MÁXIMOS ==========
   const { 
@@ -367,7 +427,7 @@ function ComparisonView({ sessions }) {
       borderWidth: 2,
       pointRadius: 0,
       pointHoverRadius: 4,
-      tension: 0.4
+      tension: 0  // sin suavizado: la cola plana al 1% se ve como línea horizontal
     }))
   }), [labels, normalizedData])
 
@@ -462,6 +522,26 @@ function ComparisonView({ sessions }) {
     }
   }), [sessions])
 
+  const wadOptions = useMemo(() => ({
+    ...options,
+    scales: {
+      ...options.scales,
+      y: {
+        ...options.scales.y,
+        min: 0,
+        max: 100
+      },
+      x: {
+        ...options.scales.x,
+        title: {
+          display: true,
+          text: `Progreso WAD (%) — 0% inicio, 100% apagado. La leyenda indica los minutos en ≤1% antes del apagado.`,
+          font: { size: 11, weight: '500' }
+        }
+      }
+    }
+  }), [options])
+
   return (
     <div className="comparison-view">
       <h2>Vista de Comparación ({sessions.length} sesiones)</h2>
@@ -493,10 +573,10 @@ function ComparisonView({ sessions }) {
         <div className="comparison-chart" style={{ backgroundColor: '#f3f9fd' }}>
           <div className="chart-header">
             <h3>Comparación WAD Battery</h3>
-            <ChartTooltip text="Compara el comportamiento de la batería WAD entre múltiples cirugías normalizadas al 0-100% del tiempo total. Permite identificar patrones consistentes o anomalías." />
+            <ChartTooltip text="El eje X va de 0% a 100% donde 100% = momento en que la batería WAD llega a ≤1% (batería útil agotada). La leyenda muestra cuántos minutos siguió funcionando en ≤1% antes de apagarse definitivamente." />
           </div>
           <div className="chart-container">
-            <Line data={wadComparisonData} options={options} />
+            <Line data={wadComparisonData} options={wadOptions} plugins={[shadeTailPlugin]} />
           </div>
         </div>
 

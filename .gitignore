@@ -38,3 +38,6 @@ Thumbs.db
 # CSV and TXT test files (optional - remove if you want to commit sample files)
 *.csv
 *.txt
+
+# agents 
+.agents/
