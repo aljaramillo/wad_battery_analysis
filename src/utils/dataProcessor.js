@@ -205,6 +205,376 @@ export const analyzeWADAccuracy = (data) => {
   return results
 }
 
+const parseTimeToMinutes = (timeStr) => {
+  if (!timeStr || typeof timeStr !== 'string') {
+    return 0
+  }
+
+  const parts = timeStr.split(':')
+  const hours = parseInt(parts[0], 10)
+  const minutes = parseInt(parts[1], 10)
+  const seconds = parseInt(parts[2], 10)
+
+  return hours * 60 + minutes + seconds / 60
+}
+
+const clampBatteryBucket = (batteryPct) => {
+  if (batteryPct == null || Number.isNaN(batteryPct)) {
+    return null
+  }
+
+  return Math.max(0, Math.min(100, Math.round(batteryPct)))
+}
+
+const sampleSeriesEvery = (series, interval = 6) => {
+  if (series.length === 0) return []
+
+  const sampled = series.filter((_, index) => index % interval === 0)
+  const lastPoint = series[series.length - 1]
+
+  if (sampled[sampled.length - 1] !== lastPoint) {
+    sampled.push(lastPoint)
+  }
+
+  return sampled
+}
+
+const getNearestAggregateBucket = (aggregatePoints, batteryBucket) => {
+  if (!aggregatePoints.length || batteryBucket == null) {
+    return null
+  }
+
+  let nearestPoint = null
+  let nearestDistance = Number.POSITIVE_INFINITY
+
+  aggregatePoints.forEach((point) => {
+    const distance = Math.abs(point.batteryBucket - batteryBucket)
+    if (distance < nearestDistance) {
+      nearestPoint = point
+      nearestDistance = distance
+    }
+  })
+
+  return nearestPoint
+}
+
+const getNearestAggregateMinute = (aggregatePoints, elapsedMinute) => {
+  if (!aggregatePoints.length || elapsedMinute == null) {
+    return null
+  }
+
+  let nearestPoint = null
+  let nearestDistance = Number.POSITIVE_INFINITY
+
+  aggregatePoints.forEach((point) => {
+    const distance = Math.abs(point.elapsedMinute - elapsedMinute)
+    if (distance < nearestDistance) {
+      nearestPoint = point
+      nearestDistance = distance
+    }
+  })
+
+  return nearestPoint
+}
+
+const average = (values) => values.reduce((sum, value) => sum + value, 0) / values.length
+
+export const buildWADCalibrationSeries = (data) => {
+  const wadValidData = getWADValidData(data)
+
+  if (wadValidData.length === 0) {
+    return []
+  }
+
+  const firstTimeMinutes = parseTimeToMinutes(wadValidData[0]['Surgery Time'])
+  const lastTimeMinutes = parseTimeToMinutes(wadValidData[wadValidData.length - 1]['Surgery Time'])
+  const totalTimeMinutes = Math.max(0, lastTimeMinutes - firstTimeMinutes)
+  const denominator = Math.max(wadValidData.length - 1, 1)
+
+  return wadValidData.map((row, index) => {
+    const batteryPct = row['WAD Battery %']
+    const vendorEstimateMin = row['WAD Duration (min)'] >= 0 ? row['WAD Duration (min)'] : null
+    const progress = index / denominator
+    const actualRemainingMin = totalTimeMinutes * (1 - progress)
+
+    return {
+      time: row['Surgery Time'],
+      batteryPct,
+      batteryBucket: clampBatteryBucket(batteryPct),
+      vendorEstimateMin,
+      actualRemainingMin,
+      elapsedMinutes: totalTimeMinutes * progress,
+      elapsedSampleIndex: index,
+      elapsedPct: progress * 100
+    }
+  })
+}
+
+export const buildWADCalibrationProfile = (data) => {
+  const series = buildWADCalibrationSeries(data)
+  const bucketMap = new Map()
+
+  series.forEach((point) => {
+    if (point.batteryBucket == null) {
+      return
+    }
+
+    const bucketEntry = bucketMap.get(point.batteryBucket) ?? {
+      vendorEstimateValues: [],
+      actualRemainingValues: [],
+      sampleCount: 0
+    }
+
+    if (point.vendorEstimateMin != null) {
+      bucketEntry.vendorEstimateValues.push(point.vendorEstimateMin)
+    }
+
+    bucketEntry.actualRemainingValues.push(point.actualRemainingMin)
+    bucketEntry.sampleCount += 1
+    bucketMap.set(point.batteryBucket, bucketEntry)
+  })
+
+  return Array.from({ length: 101 }, (_, index) => {
+    const batteryBucket = 100 - index
+    const bucketEntry = bucketMap.get(batteryBucket)
+
+    return {
+      batteryBucket,
+      vendorEstimateMin: bucketEntry?.vendorEstimateValues.length
+        ? average(bucketEntry.vendorEstimateValues)
+        : null,
+      actualRemainingMin: bucketEntry?.actualRemainingValues.length
+        ? average(bucketEntry.actualRemainingValues)
+        : null,
+      sampleCount: bucketEntry?.sampleCount ?? 0
+    }
+  })
+}
+
+export const aggregateWADCalibrationByBattery = (sessions) => {
+  const aggregateMap = new Map()
+
+  sessions.forEach((session) => {
+    const sessionSeries = buildWADCalibrationSeries(session.data)
+    const perSessionBuckets = new Map()
+
+    sessionSeries.forEach((point) => {
+      if (point.batteryBucket == null) {
+        return
+      }
+
+      const bucketEntry = perSessionBuckets.get(point.batteryBucket) ?? {
+        actualRemainingValues: []
+      }
+
+      bucketEntry.actualRemainingValues.push(point.actualRemainingMin)
+      perSessionBuckets.set(point.batteryBucket, bucketEntry)
+    })
+
+    perSessionBuckets.forEach((bucketEntry, batteryBucket) => {
+      const perSessionAverage = bucketEntry.actualRemainingValues.reduce((sum, value) => sum + value, 0) / bucketEntry.actualRemainingValues.length
+
+      const aggregateEntry = aggregateMap.get(batteryBucket) ?? {
+        batteryBucket,
+        values: []
+      }
+
+      aggregateEntry.values.push(perSessionAverage)
+      aggregateMap.set(batteryBucket, aggregateEntry)
+    })
+  })
+
+  return Array.from(aggregateMap.values())
+    .map((entry) => {
+      const sortedValues = [...entry.values].sort((left, right) => left - right)
+      const sampleCount = sortedValues.length
+      const meanActualRemainingMin = sortedValues.reduce((sum, value) => sum + value, 0) / sampleCount
+      const variance = sortedValues.reduce((sum, value) => sum + (value - meanActualRemainingMin) ** 2, 0) / sampleCount
+
+      return {
+        batteryBucket: entry.batteryBucket,
+        sampleCount,
+        minActualRemainingMin: sortedValues[0],
+        maxActualRemainingMin: sortedValues[sortedValues.length - 1],
+        meanActualRemainingMin,
+        stdDevActualRemainingMin: Math.sqrt(variance)
+      }
+    })
+    .sort((left, right) => right.batteryBucket - left.batteryBucket)
+}
+
+export const buildWADCalibrationTimelineProfile = (data) => {
+  const series = buildWADCalibrationSeries(data)
+  const minuteMap = new Map()
+  const totalDurationMin = series[series.length - 1]?.elapsedMinutes ?? 0
+  const maxMinute = Math.max(0, Math.ceil(totalDurationMin))
+
+  series.forEach((point) => {
+    const elapsedMinute = Math.max(0, Math.round(point.elapsedMinutes ?? 0))
+    const minuteEntry = minuteMap.get(elapsedMinute) ?? {
+      vendorEstimateValues: [],
+      sampleCount: 0
+    }
+
+    if (point.vendorEstimateMin != null) {
+      minuteEntry.vendorEstimateValues.push(point.vendorEstimateMin)
+    }
+
+    minuteEntry.sampleCount += 1
+    minuteMap.set(elapsedMinute, minuteEntry)
+  })
+
+  return Array.from({ length: maxMinute + 1 }, (_, elapsedMinute) => {
+    const minuteEntry = minuteMap.get(elapsedMinute)
+
+    return {
+      elapsedMinute,
+      vendorEstimateMin: minuteEntry?.vendorEstimateValues.length
+        ? average(minuteEntry.vendorEstimateValues)
+        : null,
+      actualRemainingMin: Math.max(0, totalDurationMin - elapsedMinute),
+      sampleCount: minuteEntry?.sampleCount ?? 0
+    }
+  })
+}
+
+export const aggregateWADCalibrationByElapsedMinute = (sessions) => {
+  const aggregateMap = new Map()
+
+  sessions.forEach((session) => {
+    const sessionSeries = buildWADCalibrationSeries(session.data)
+    const totalDurationMin = sessionSeries[sessionSeries.length - 1]?.elapsedMinutes ?? 0
+    const maxMinute = Math.max(0, Math.ceil(totalDurationMin))
+
+    for (let elapsedMinute = 0; elapsedMinute <= maxMinute; elapsedMinute += 1) {
+      const aggregateEntry = aggregateMap.get(elapsedMinute) ?? {
+        elapsedMinute,
+        values: []
+      }
+
+      aggregateEntry.values.push(Math.max(0, totalDurationMin - elapsedMinute))
+      aggregateMap.set(elapsedMinute, aggregateEntry)
+    }
+  })
+
+  return Array.from(aggregateMap.values())
+    .map((entry) => {
+      const sortedValues = [...entry.values].sort((left, right) => left - right)
+      const sampleCount = sortedValues.length
+      const meanActualRemainingMin = sortedValues.reduce((sum, value) => sum + value, 0) / sampleCount
+      const variance = sortedValues.reduce((sum, value) => sum + (value - meanActualRemainingMin) ** 2, 0) / sampleCount
+
+      return {
+        elapsedMinute: entry.elapsedMinute,
+        sampleCount,
+        minActualRemainingMin: sortedValues[0],
+        maxActualRemainingMin: sortedValues[sortedValues.length - 1],
+        meanActualRemainingMin,
+        stdDevActualRemainingMin: Math.sqrt(variance)
+      }
+    })
+    .sort((left, right) => left.elapsedMinute - right.elapsedMinute)
+}
+
+export const buildWADCalibrationExperiment = (focusSession, sessions, options = {}) => {
+  const lowerToleranceMinutes = options.lowerToleranceMinutes ?? 8
+  const upperToleranceMinutes = options.upperToleranceMinutes ?? 8
+  const focusProfile = buildWADCalibrationProfile(focusSession.data)
+  const aggregateByBattery = aggregateWADCalibrationByBattery(sessions)
+
+  const bucketSeries = focusProfile.map((point) => {
+    const aggregatePoint = getNearestAggregateBucket(aggregateByBattery, point.batteryBucket)
+    const ownEstimateMin = aggregatePoint?.meanActualRemainingMin ?? null
+    const lowerBoundMin = ownEstimateMin == null ? null : Math.max(0, ownEstimateMin - lowerToleranceMinutes)
+    const upperBoundMin = ownEstimateMin == null ? null : ownEstimateMin + upperToleranceMinutes
+    const shouldActivateOwnEstimate = point.vendorEstimateMin != null
+      && lowerBoundMin != null
+      && upperBoundMin != null
+      && (point.vendorEstimateMin < lowerBoundMin || point.vendorEstimateMin > upperBoundMin)
+
+    return {
+      ...point,
+      ownEstimateMin,
+      lowerBoundMin,
+      upperBoundMin,
+      aggregateSampleCount: aggregatePoint?.sampleCount ?? 0,
+      aggregateStdDevMin: aggregatePoint?.stdDevActualRemainingMin ?? null,
+      shouldActivateOwnEstimate
+    }
+  })
+
+  const coverageCount = bucketSeries.filter((point) => point.ownEstimateMin != null).length
+  const activationCount = bucketSeries.filter((point) => point.shouldActivateOwnEstimate).length
+
+  return {
+    lowerToleranceMinutes,
+    upperToleranceMinutes,
+    coverageCount,
+    activationCount,
+    batteryLabels: bucketSeries.map((point) => `${point.batteryBucket}%`),
+    bucketSeries,
+    aggregateByBattery
+  }
+}
+
+export const buildWADCalibrationTimelineExperiment = (focusSession, sessions, options = {}) => {
+  const lowerToleranceMinutes = options.lowerToleranceMinutes ?? 8
+  const upperToleranceMinutes = options.upperToleranceMinutes ?? 8
+  const focusTimelineProfile = buildWADCalibrationTimelineProfile(focusSession.data)
+  const aggregateByElapsedMinute = aggregateWADCalibrationByElapsedMinute(sessions)
+  const focusDurationMin = focusTimelineProfile[focusTimelineProfile.length - 1]?.elapsedMinute ?? 0
+  const maxElapsedMinute = Math.max(
+    focusDurationMin,
+    aggregateByElapsedMinute[aggregateByElapsedMinute.length - 1]?.elapsedMinute ?? 0
+  )
+  const focusProfileMap = new Map(
+    focusTimelineProfile.map((point) => [point.elapsedMinute, point])
+  )
+
+  const timeSeries = Array.from({ length: maxElapsedMinute + 1 }, (_, elapsedMinute) => {
+    const focusPoint = focusProfileMap.get(elapsedMinute)
+    const aggregatePoint = getNearestAggregateMinute(aggregateByElapsedMinute, elapsedMinute)
+    const ownEstimateMin = aggregatePoint?.meanActualRemainingMin ?? null
+    const lowerBoundMin = ownEstimateMin == null ? null : Math.max(0, ownEstimateMin - lowerToleranceMinutes)
+    const upperBoundMin = ownEstimateMin == null ? null : ownEstimateMin + upperToleranceMinutes
+    const vendorEstimateMin = focusPoint?.vendorEstimateMin ?? null
+    const actualRemainingMin = elapsedMinute <= focusDurationMin
+      ? Math.max(0, focusTimelineProfile[0]?.actualRemainingMin - elapsedMinute)
+      : null
+    const shouldActivateOwnEstimate = vendorEstimateMin != null
+      && lowerBoundMin != null
+      && upperBoundMin != null
+      && (vendorEstimateMin < lowerBoundMin || vendorEstimateMin > upperBoundMin)
+
+    return {
+      elapsedMinute,
+      vendorEstimateMin,
+      actualRemainingMin,
+      ownEstimateMin,
+      lowerBoundMin,
+      upperBoundMin,
+      aggregateSampleCount: aggregatePoint?.sampleCount ?? 0,
+      aggregateStdDevMin: aggregatePoint?.stdDevActualRemainingMin ?? null,
+      shouldActivateOwnEstimate
+    }
+  })
+
+  const coverageCount = timeSeries.filter((point) => point.ownEstimateMin != null).length
+  const activationCount = timeSeries.filter((point) => point.shouldActivateOwnEstimate).length
+
+  return {
+    lowerToleranceMinutes,
+    upperToleranceMinutes,
+    coverageCount,
+    activationCount,
+    focusDurationMin,
+    maxElapsedMinute,
+    timeLabels: timeSeries.map((point) => point.elapsedMinute),
+    timeSeries,
+    aggregateByElapsedMinute
+  }
+}
+
 /**
  * Analiza la precisión de estimación de la LS
  * Retorna array con datos solo de la LS

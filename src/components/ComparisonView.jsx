@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { Line, Scatter, Bar } from 'react-chartjs-2'
+import zoomPlugin from 'chartjs-plugin-zoom'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,6 +17,10 @@ import {
   getColorForSession,
   getWADValidData,
   getLSValidData,
+  buildWADCalibrationExperiment,
+  buildWADCalibrationProfile,
+  buildWADCalibrationTimelineExperiment,
+  buildWADCalibrationTimelineProfile,
   analyzeTemperatureVsUsage,
   analyzeCurrentConsumption,
   analyzeVoltageDegradation,
@@ -37,7 +42,8 @@ ChartJS.register(
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  zoomPlugin
 )
 
 // Plugin para mostrar valores sobre las barras
@@ -58,8 +64,10 @@ const barValuesPlugin = {
             ctx.fillStyle = '#333'
             ctx.font = 'bold 11px Arial'
             ctx.textAlign = 'center'
-            ctx.textBaseline = 'bottom'
-            ctx.fillText(value.toFixed(1), bar.x, bar.y - 5)
+            ctx.textBaseline = 'middle'
+            ctx.translate(bar.x, bar.y - 18)
+            ctx.rotate(-Math.PI / 2)
+            ctx.fillText(value.toFixed(1), 0, 0)
             ctx.restore()
           }
         })
@@ -103,7 +111,295 @@ const shadeTailPlugin = {
   }
 }
 
+const hexToRgba = (hexColor, alpha = 1) => {
+  if (!hexColor || typeof hexColor !== 'string' || !hexColor.startsWith('#')) {
+    return hexColor
+  }
+
+  const normalizedHex = hexColor.replace('#', '')
+  const expandedHex = normalizedHex.length === 3
+    ? normalizedHex.split('').map((char) => char + char).join('')
+    : normalizedHex
+
+  const red = parseInt(expandedHex.slice(0, 2), 16)
+  const green = parseInt(expandedHex.slice(2, 4), 16)
+  const blue = parseInt(expandedHex.slice(4, 6), 16)
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+}
+
 function ComparisonView({ sessions }) {
+  const [isCalibrationTooltipEnabled, setIsCalibrationTooltipEnabled] = useState(true)
+  const [hiddenCalibrationGroups, setHiddenCalibrationGroups] = useState([])
+  const [lowerToleranceMinutes, setLowerToleranceMinutes] = useState(8)
+  const [upperToleranceMinutes, setUpperToleranceMinutes] = useState(8)
+  const [focusSessionIndex, setFocusSessionIndex] = useState(0)
+  const [hoveredCalibrationSeries, setHoveredCalibrationSeries] = useState(null)
+  const [hoveredTimelineSeries, setHoveredTimelineSeries] = useState(null)
+  const [isAltPressed, setIsAltPressed] = useState(false)
+  const [hoveredPanChartKey, setHoveredPanChartKey] = useState(null)
+  const [activePanChartKey, setActivePanChartKey] = useState(null)
+  const batteryCalibrationChartRef = useRef(null)
+  const timelineCalibrationChartRef = useRef(null)
+  const isSyncingZoomRef = useRef(false)
+  const safeFocusSessionIndex = Math.min(focusSessionIndex, Math.max(0, sessions.length - 1))
+
+  const updateHoveredCalibrationSeries = (nextSeries) => {
+    setHoveredCalibrationSeries((currentSeries) => {
+      if (!nextSeries && !currentSeries) {
+        return currentSeries
+      }
+
+      if (
+        currentSeries
+        && nextSeries
+        && currentSeries.label === nextSeries.label
+        && currentSeries.x === nextSeries.x
+        && currentSeries.y === nextSeries.y
+      ) {
+        return currentSeries
+      }
+
+      return nextSeries
+    })
+  }
+
+  const updateToleranceMinutes = (side, nextValue) => {
+    const numericValue = Number(nextValue)
+    if (Number.isNaN(numericValue)) {
+      return
+    }
+
+    const clampedValue = Math.max(0, Math.min(60, numericValue))
+    startTransition(() => {
+      if (side === 'lower') {
+        setLowerToleranceMinutes(clampedValue)
+        return
+      }
+
+      setUpperToleranceMinutes(clampedValue)
+    })
+  }
+
+  const updateHoveredTimelineSeries = (nextSeries) => {
+    setHoveredTimelineSeries((currentSeries) => {
+      if (!nextSeries && !currentSeries) {
+        return currentSeries
+      }
+
+      if (
+        currentSeries
+        && nextSeries
+        && currentSeries.label === nextSeries.label
+        && currentSeries.x === nextSeries.x
+        && currentSeries.y === nextSeries.y
+      ) {
+        return currentSeries
+      }
+
+      return nextSeries
+    })
+  }
+
+  const toggleCalibrationGroup = (groupKey) => {
+    setHiddenCalibrationGroups((currentGroups) => (
+      (() => {
+        const isVendorGroup = sessions.some((session) => `${session.customName || session.summary.surgeryDate} - Vendor WAD` === groupKey)
+        const isCurrentlyHidden = currentGroups.includes(groupKey)
+
+        if (!isVendorGroup) {
+          return isCurrentlyHidden
+            ? currentGroups.filter((currentGroup) => currentGroup !== groupKey)
+            : [...currentGroups, groupKey]
+        }
+
+        const visibleVendorGroupCount = sessions.filter((session) => {
+          const vendorGroupKey = `${session.customName || session.summary.surgeryDate} - Vendor WAD`
+          return !currentGroups.includes(vendorGroupKey)
+        }).length
+
+        if (!isCurrentlyHidden && visibleVendorGroupCount <= 1) {
+          return currentGroups
+        }
+
+        return isCurrentlyHidden
+          ? currentGroups.filter((currentGroup) => currentGroup !== groupKey)
+          : [...currentGroups, groupKey]
+      })()
+    ))
+  }
+
+  const getHoveredCalibrationLabel = (rawLabel) => {
+    if (!rawLabel) {
+      return ''
+    }
+
+    return rawLabel.endsWith(' - Vendor WAD')
+      ? rawLabel.replace(' - Vendor WAD', '')
+      : rawLabel
+  }
+
+  const getCalibrationChartKey = (chart) => {
+    if (chart === batteryCalibrationChartRef.current) {
+      return 'battery'
+    }
+
+    if (chart === timelineCalibrationChartRef.current) {
+      return 'timeline'
+    }
+
+    return null
+  }
+
+  useEffect(() => {
+    const isInteractiveTarget = (target) => {
+      if (!(target instanceof HTMLElement)) {
+        return false
+      }
+
+      return Boolean(target.closest('input, textarea, select, button, [contenteditable="true"]'))
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Alt' || event.repeat || isInteractiveTarget(event.target)) {
+        return
+      }
+
+      setIsAltPressed(true)
+    }
+
+    const handleKeyUp = (event) => {
+      if (event.key !== 'Alt') {
+        return
+      }
+
+      setIsAltPressed(false)
+      setActivePanChartKey(null)
+    }
+
+    const handleWindowBlur = () => {
+      setIsAltPressed(false)
+      setActivePanChartKey(null)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('blur', handleWindowBlur)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [activePanChartKey, hoveredPanChartKey])
+
+  const syncChartViewport = (sourceChart, targetChart) => {
+    if (!sourceChart || !targetChart) {
+      return
+    }
+
+    const sourceScale = sourceChart.scales?.x
+    const sourceYScale = sourceChart.scales?.y
+    const sourceInitialBounds = sourceChart.getInitialScaleBounds?.()
+    const targetInitialBounds = targetChart.getInitialScaleBounds?.()
+    const sourceXBounds = sourceInitialBounds?.x
+    const targetXBounds = targetInitialBounds?.x
+    const sourceYBounds = sourceInitialBounds?.y
+    const targetYBounds = targetInitialBounds?.y
+
+    if (!sourceScale || !sourceXBounds || !targetXBounds) {
+      return
+    }
+
+    const sourceOriginalMin = typeof sourceXBounds.min === 'number' ? sourceXBounds.min : 0
+    const sourceOriginalMax = typeof sourceXBounds.max === 'number' ? sourceXBounds.max : sourceOriginalMin + 1
+    const targetOriginalMin = typeof targetXBounds.min === 'number' ? targetXBounds.min : 0
+    const targetOriginalMax = typeof targetXBounds.max === 'number' ? targetXBounds.max : targetOriginalMin + 1
+    const sourceVisibleMin = typeof sourceScale.min === 'number' ? sourceScale.min : sourceOriginalMin
+    const sourceVisibleMax = typeof sourceScale.max === 'number' ? sourceScale.max : sourceOriginalMax
+    const sourceSpan = Math.max(1, sourceOriginalMax - sourceOriginalMin)
+    const targetSpan = Math.max(1, targetOriginalMax - targetOriginalMin)
+    const startRatio = Math.max(0, Math.min(1, (sourceVisibleMin - sourceOriginalMin) / sourceSpan))
+    const endRatio = Math.max(startRatio, Math.min(1, (sourceVisibleMax - sourceOriginalMin) / sourceSpan))
+    const nextMin = targetOriginalMin + (startRatio * targetSpan)
+    const nextMax = targetOriginalMin + (endRatio * targetSpan)
+
+    targetChart.zoomScale?.('x', {
+      min: nextMin,
+      max: nextMax
+    }, 'none')
+
+    if (sourceYScale && targetYBounds) {
+      const sourceYMin = typeof sourceYScale.min === 'number' ? sourceYScale.min : undefined
+      const sourceYMax = typeof sourceYScale.max === 'number' ? sourceYScale.max : undefined
+      const targetOriginalYMin = typeof targetYBounds.min === 'number' ? targetYBounds.min : sourceYMin
+      const targetOriginalYMax = typeof targetYBounds.max === 'number' ? targetYBounds.max : sourceYMax
+
+      if (sourceYMin == null && sourceYMax == null) {
+        return
+      }
+
+      targetChart.zoomScale?.('y', {
+        min: sourceYMin != null ? Math.max(targetOriginalYMin ?? sourceYMin, sourceYMin) : targetOriginalYMin,
+        max: sourceYMax != null ? Math.min(targetOriginalYMax ?? sourceYMax, sourceYMax) : targetOriginalYMax
+      }, 'none')
+    }
+  }
+
+  const syncCalibrationZoom = (sourceChart) => {
+    if (isSyncingZoomRef.current) {
+      return
+    }
+
+    const batteryChart = batteryCalibrationChartRef.current
+    const timelineChart = timelineCalibrationChartRef.current
+    const targetChart = sourceChart === batteryChart ? timelineChart : batteryChart
+
+    if (!targetChart) {
+      return
+    }
+
+    isSyncingZoomRef.current = true
+
+    try {
+      syncChartViewport(sourceChart, targetChart)
+    } finally {
+      isSyncingZoomRef.current = false
+    }
+  }
+
+  const startSynchronizedPan = (chart, panEvent) => {
+    const nativeEvent = panEvent?.srcEvent
+
+    if (!nativeEvent?.altKey) {
+      return false
+    }
+
+    const chartKey = getCalibrationChartKey(chart)
+    setActivePanChartKey(chartKey)
+    return true
+  }
+
+  const handleSynchronizedPan = (chart) => {
+    syncCalibrationZoom(chart)
+  }
+
+  const completeSynchronizedPan = (chart) => {
+    syncCalibrationZoom(chart)
+    setActivePanChartKey(null)
+  }
+
+  const resetChartZoom = () => {
+    isSyncingZoomRef.current = true
+
+    try {
+      batteryCalibrationChartRef.current?.resetZoom?.()
+      timelineCalibrationChartRef.current?.resetZoom?.()
+    } finally {
+      isSyncingZoomRef.current = false
+    }
+  }
+
   // Muestrea N puntos de un array incluyendo siempre el primero y el último,
   // con índices proporcionales. Garantiza que el final del array siempre esté
   // representado independientemente del tamaño del array.
@@ -147,6 +443,120 @@ function ComparisonView({ sessions }) {
   }), [sessions])
 
   const labels = useMemo(() => Array.from({ length: MAIN_SAMPLES }, (_, i) => `${i}%`), [])
+  const visibleFocusSessions = useMemo(
+    () => sessions
+      .map((session, index) => ({
+        index,
+        label: session.customName || session.summary.surgeryDate,
+        hidden: hiddenCalibrationGroups.includes(`${session.customName || session.summary.surgeryDate} - Vendor WAD`)
+      }))
+      .filter((session) => !session.hidden),
+    [hiddenCalibrationGroups, sessions]
+  )
+  const effectiveFocusSessionIndex = useMemo(() => {
+    if (visibleFocusSessions.length === 0) {
+      return safeFocusSessionIndex
+    }
+
+    const currentFocusStillVisible = visibleFocusSessions.some((session) => session.index === safeFocusSessionIndex)
+    if (currentFocusStillVisible) {
+      return safeFocusSessionIndex
+    }
+
+    const nextVisibleSession = visibleFocusSessions.find((session) => session.index > safeFocusSessionIndex)
+    return nextVisibleSession?.index ?? visibleFocusSessions[visibleFocusSessions.length - 1].index
+  }, [safeFocusSessionIndex, visibleFocusSessions])
+  const visibleCalibrationSessions = useMemo(
+    () => visibleFocusSessions.map((session) => sessions[session.index]),
+    [sessions, visibleFocusSessions]
+  )
+  const focusSession = sessions[effectiveFocusSessionIndex]
+  const focusSessionLabel = focusSession.customName || focusSession.summary.surgeryDate
+
+  useEffect(() => {
+    if (effectiveFocusSessionIndex !== focusSessionIndex) {
+      setFocusSessionIndex(effectiveFocusSessionIndex)
+    }
+  }, [effectiveFocusSessionIndex, focusSessionIndex])
+  const wadCalibrationProfiles = useMemo(
+    () => sessions.map((session, index) => ({
+      label: session.customName || session.summary.surgeryDate,
+      color: getColorForSession(index),
+      profile: buildWADCalibrationProfile(session.data)
+    })),
+    [sessions]
+  )
+
+  const wadCalibrationExperiment = useMemo(
+    () => buildWADCalibrationExperiment(focusSession, visibleCalibrationSessions, {
+      lowerToleranceMinutes,
+      upperToleranceMinutes
+    }),
+    [focusSession, lowerToleranceMinutes, upperToleranceMinutes, visibleCalibrationSessions]
+  )
+
+  const wadCalibrationTimelineProfiles = useMemo(
+    () => sessions.map((session, index) => ({
+      label: session.customName || session.summary.surgeryDate,
+      color: getColorForSession(index),
+      profile: buildWADCalibrationTimelineProfile(session.data)
+    })),
+    [sessions]
+  )
+
+  const wadCalibrationTimelineExperiment = useMemo(
+    () => buildWADCalibrationTimelineExperiment(focusSession, visibleCalibrationSessions, {
+      lowerToleranceMinutes,
+      upperToleranceMinutes
+    }),
+    [focusSession, lowerToleranceMinutes, upperToleranceMinutes, visibleCalibrationSessions]
+  )
+
+  const wadLegendItems = useMemo(
+    () => wadCalibrationProfiles.map((sessionProfile) => ({
+      groupKey: `${sessionProfile.label} - Vendor WAD`,
+      label: sessionProfile.label,
+      color: sessionProfile.color,
+      lineStyle: 'solid',
+      emphasis: sessionProfile.label === focusSessionLabel,
+      hidden: hiddenCalibrationGroups.includes(`${sessionProfile.label} - Vendor WAD`)
+    })),
+    [focusSessionLabel, hiddenCalibrationGroups, wadCalibrationProfiles]
+  )
+
+  const calibrationReferenceLegendItems = useMemo(
+    () => [
+      {
+        groupKey: 'Tiempo real restante (min)',
+        label: 'Tiempo real restante (sesion foco)',
+        color: '#e74c3c',
+        lineStyle: 'dashed',
+        hidden: hiddenCalibrationGroups.includes('Tiempo real restante (min)')
+      },
+      {
+        groupKey: 'Estimacion propia media (min)',
+        label: 'Estimacion propia media',
+        color: '#14967f',
+        lineStyle: 'solid',
+        hidden: hiddenCalibrationGroups.includes('Estimacion propia media (min)')
+      },
+      {
+        groupKey: 'Banda de activacion',
+        label: 'Banda de activacion',
+        color: 'rgba(241, 196, 15, 0.95)',
+        lineStyle: 'dashed',
+        hidden: hiddenCalibrationGroups.includes('Banda de activacion')
+      },
+      {
+        groupKey: 'Fallback activado',
+        label: 'Fallback activado',
+        color: '#d35400',
+        lineStyle: 'point',
+        hidden: hiddenCalibrationGroups.includes('Fallback activado')
+      }
+    ],
+    [hiddenCalibrationGroups]
+  )
 
   // ========== PREPARAR DATOS DE TIEMPOS MÁXIMOS ==========
   const { 
@@ -542,9 +952,684 @@ function ComparisonView({ sessions }) {
     }
   }), [options])
 
+  const wadCalibrationChartData = useMemo(() => ({
+    labels: wadCalibrationExperiment.batteryLabels,
+    datasets: [
+      ...wadCalibrationProfiles.map((sessionProfile) => ({
+        legendGroup: `${sessionProfile.label} - Vendor WAD`,
+        label: `${sessionProfile.label} - Vendor WAD`,
+        data: sessionProfile.profile.map((point) => point.vendorEstimateMin),
+        borderColor: sessionProfile.label === focusSessionLabel
+          ? sessionProfile.color
+          : hexToRgba(sessionProfile.color, 0.5),
+        backgroundColor: sessionProfile.label === focusSessionLabel
+          ? sessionProfile.color
+          : hexToRgba(sessionProfile.color, 0.5),
+        borderWidth: sessionProfile.label === focusSessionLabel ? 3 : 1.4,
+        order: 10,
+        hidden: hiddenCalibrationGroups.includes(`${sessionProfile.label} - Vendor WAD`),
+        pointRadius: 0,
+        tension: 0.2,
+        spanGaps: false
+      })),
+      {
+        legendGroup: 'Tiempo real restante (min)',
+        label: 'Tiempo real restante (min)',
+        data: wadCalibrationExperiment.bucketSeries.map((point) => point.actualRemainingMin),
+        borderColor: '#e74c3c',
+        borderWidth: 3.5,
+        borderDash: [6, 4],
+        order: 4,
+        hidden: hiddenCalibrationGroups.includes('Tiempo real restante (min)'),
+        pointRadius: 0,
+        tension: 0.25,
+        spanGaps: false
+      },
+      {
+        legendGroup: 'Estimacion propia media (min)',
+        label: 'Estimacion propia media (min)',
+        data: wadCalibrationExperiment.bucketSeries.map((point) => point.ownEstimateMin),
+        borderColor: '#14967f',
+        backgroundColor: 'rgba(20, 150, 127, 0.08)',
+        borderWidth: 3.5,
+        order: 3,
+        hidden: hiddenCalibrationGroups.includes('Estimacion propia media (min)'),
+        pointRadius: 0,
+        tension: 0.25,
+        spanGaps: false
+      },
+      {
+        legendGroup: 'Banda de activacion',
+        label: 'Limite superior activacion',
+        data: wadCalibrationExperiment.bucketSeries.map((point) => point.upperBoundMin),
+        borderColor: 'rgba(241, 196, 15, 0.95)',
+        borderWidth: 2.5,
+        borderDash: [4, 4],
+        order: 2,
+        hidden: hiddenCalibrationGroups.includes('Banda de activacion'),
+        pointRadius: 0,
+        tension: 0.2,
+        spanGaps: false
+      },
+      {
+        legendGroup: 'Banda de activacion',
+        label: 'Limite inferior activacion',
+        data: wadCalibrationExperiment.bucketSeries.map((point) => point.lowerBoundMin),
+        borderColor: 'rgba(241, 196, 15, 0.95)',
+        borderWidth: 2.5,
+        borderDash: [4, 4],
+        order: 2,
+        hidden: hiddenCalibrationGroups.includes('Banda de activacion'),
+        pointRadius: 0,
+        tension: 0.2,
+        spanGaps: false
+      },
+      {
+        legendGroup: 'Fallback activado',
+        label: 'Fallback activado',
+        data: wadCalibrationExperiment.bucketSeries.map((point) => point.shouldActivateOwnEstimate ? point.ownEstimateMin : null),
+        borderColor: '#d35400',
+        backgroundColor: '#d35400',
+        borderWidth: 0,
+        order: 1,
+        hidden: hiddenCalibrationGroups.includes('Fallback activado'),
+        showLine: false,
+        pointRadius: 5,
+        pointHoverRadius: 6,
+        spanGaps: false
+      }
+    ]
+  }), [focusSessionLabel, hiddenCalibrationGroups, wadCalibrationExperiment, wadCalibrationProfiles])
+
+  const wadCalibrationOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    onHover: (event, activeElements, chart) => {
+      if (isCalibrationTooltipEnabled) {
+        updateHoveredCalibrationSeries(null)
+        return
+      }
+
+      const activeElement = activeElements[0]
+      if (!activeElement) {
+        updateHoveredCalibrationSeries(null)
+        return
+      }
+
+      const hoveredDataset = chart.data.datasets[activeElement.datasetIndex]
+      updateHoveredCalibrationSeries({
+        label: getHoveredCalibrationLabel(hoveredDataset?.label || ''),
+        x: event.x,
+        y: event.y
+      })
+    },
+    interaction: {
+      mode: isCalibrationTooltipEnabled ? 'index' : 'nearest',
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        enabled: isCalibrationTooltipEnabled,
+        backgroundColor: 'rgba(0, 0, 0, 0.82)',
+        padding: 12,
+        callbacks: {
+          afterBody: (items) => {
+            const point = wadCalibrationExperiment.bucketSeries[items[0]?.dataIndex]
+            if (!point) return []
+
+            return [
+              `Bucket bateria: ${point.batteryBucket}%`,
+              `Muestras agregadas: ${point.aggregateSampleCount}`,
+              `Activar fallback: ${point.shouldActivateOwnEstimate ? 'si' : 'no'}`
+            ]
+          }
+        }
+      },
+      zoom: {
+        limits: {
+          x: { min: 'original', max: 'original' },
+          y: { min: 0, max: 300 }
+        },
+        pan: {
+          enabled: true,
+          mode: 'xy',
+          modifierKey: 'alt',
+          threshold: 2,
+          onPan: ({ chart }) => handleSynchronizedPan(chart),
+          onPanStart: ({ chart, event }) => startSynchronizedPan(chart, event),
+          onPanComplete: ({ chart }) => completeSynchronizedPan(chart)
+        },
+        zoom: {
+          mode: 'xy',
+          onZoomComplete: ({ chart }) => syncCalibrationZoom(chart),
+          wheel: {
+            enabled: true,
+            modifierKey: 'alt'
+          },
+          pinch: {
+            enabled: false
+          },
+          drag: {
+            enabled: false
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 300, // EJE Y fijo para mostrar bien la banda de activación y evitar zooms extremos
+        title: {
+          display: true,
+          text: 'Estimacion temporal (minutos)',
+          font: {
+            size: 13,
+            weight: '500'
+          }
+        },
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)'
+        }
+      },
+      x: {
+        title: {
+          display: true,
+          text: `Comparativa por porcentaje de bateria | Sesion foco: ${focusSessionLabel}`,
+          font: {
+            size: 13,
+            weight: '500'
+          }
+        },
+        ticks: {
+          maxRotation: 0,
+          minRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 11
+        },
+        grid: {
+          display: false
+        }
+      }
+    }
+  }), [focusSessionLabel, isCalibrationTooltipEnabled, wadCalibrationExperiment])
+
+  const wadCalibrationTimelineChartData = useMemo(() => ({
+    labels: wadCalibrationTimelineExperiment.timeLabels,
+    datasets: [
+      ...wadCalibrationTimelineProfiles.map((sessionProfile) => ({
+        legendGroup: `${sessionProfile.label} - Vendor WAD`,
+        label: `${sessionProfile.label} - Vendor WAD`,
+        data: sessionProfile.profile.map((point) => point.vendorEstimateMin),
+        borderColor: sessionProfile.label === focusSessionLabel
+          ? sessionProfile.color
+          : hexToRgba(sessionProfile.color, 0.15),
+        backgroundColor: sessionProfile.label === focusSessionLabel
+          ? sessionProfile.color
+          : hexToRgba(sessionProfile.color, 0.15),
+        borderWidth: sessionProfile.label === focusSessionLabel ? 3 : 1.4,
+        order: 10,
+        hidden: hiddenCalibrationGroups.includes(`${sessionProfile.label} - Vendor WAD`),
+        pointRadius: 0,
+        tension: 0,
+        spanGaps: false
+      })),
+      {
+        legendGroup: 'Tiempo real restante (min)',
+        label: 'Tiempo real restante (min)',
+        data: wadCalibrationTimelineExperiment.timeSeries.map((point) => point.actualRemainingMin),
+        borderColor: '#e74c3c',
+        borderWidth: 3.5,
+        borderDash: [6, 4],
+        order: 4,
+        hidden: hiddenCalibrationGroups.includes('Tiempo real restante (min)'),
+        pointRadius: 0,
+        tension: 0,
+        spanGaps: false
+      },
+      {
+        legendGroup: 'Estimacion propia media (min)',
+        label: 'Estimacion propia media (min)',
+        data: wadCalibrationTimelineExperiment.timeSeries.map((point) => point.ownEstimateMin),
+        borderColor: '#14967f',
+        backgroundColor: 'rgba(20, 150, 127, 0.08)',
+        borderWidth: 3.5,
+        order: 3,
+        hidden: hiddenCalibrationGroups.includes('Estimacion propia media (min)'),
+        pointRadius: 0,
+        tension: 0,
+        spanGaps: false
+      },
+      {
+        legendGroup: 'Banda de activacion',
+        label: 'Limite superior activacion',
+        data: wadCalibrationTimelineExperiment.timeSeries.map((point) => point.upperBoundMin),
+        borderColor: 'rgba(241, 196, 15, 0.95)',
+        borderWidth: 2.5,
+        borderDash: [4, 4],
+        order: 2,
+        hidden: hiddenCalibrationGroups.includes('Banda de activacion'),
+        pointRadius: 0,
+        tension: 0,
+        spanGaps: false
+      },
+      {
+        legendGroup: 'Banda de activacion',
+        label: 'Limite inferior activacion',
+        data: wadCalibrationTimelineExperiment.timeSeries.map((point) => point.lowerBoundMin),
+        borderColor: 'rgba(241, 196, 15, 0.95)',
+        borderWidth: 2.5,
+        borderDash: [4, 4],
+        order: 2,
+        hidden: hiddenCalibrationGroups.includes('Banda de activacion'),
+        pointRadius: 0,
+        tension: 0,
+        spanGaps: false
+      },
+      {
+        legendGroup: 'Fallback activado',
+        label: 'Fallback activado',
+        data: wadCalibrationTimelineExperiment.timeSeries.map((point) => point.shouldActivateOwnEstimate ? point.ownEstimateMin : null),
+        borderColor: '#d35400',
+        backgroundColor: '#d35400',
+        borderWidth: 0,
+        order: 1,
+        hidden: hiddenCalibrationGroups.includes('Fallback activado'),
+        showLine: false,
+        pointRadius: 5,
+        pointHoverRadius: 6,
+        spanGaps: false
+      }
+    ]
+  }), [focusSessionLabel, hiddenCalibrationGroups, wadCalibrationTimelineExperiment, wadCalibrationTimelineProfiles])
+
+  const wadCalibrationTimelineOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    onHover: (event, activeElements, chart) => {
+      if (isCalibrationTooltipEnabled) {
+        updateHoveredTimelineSeries(null)
+        return
+      }
+
+      const activeElement = activeElements[0]
+      if (!activeElement) {
+        updateHoveredTimelineSeries(null)
+        return
+      }
+
+      const hoveredDataset = chart.data.datasets[activeElement.datasetIndex]
+      updateHoveredTimelineSeries({
+        label: getHoveredCalibrationLabel(hoveredDataset?.label || ''),
+        x: event.x,
+        y: event.y
+      })
+    },
+    interaction: {
+      mode: isCalibrationTooltipEnabled ? 'index' : 'nearest',
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        enabled: isCalibrationTooltipEnabled,
+        backgroundColor: 'rgba(0, 0, 0, 0.82)',
+        padding: 12,
+        callbacks: {
+          title: (items) => {
+            const elapsedMinute = items[0]?.label
+            return elapsedMinute == null ? '' : `Minuto ${elapsedMinute}`
+          },
+          afterBody: (items) => {
+            const point = wadCalibrationTimelineExperiment.timeSeries[items[0]?.dataIndex]
+            if (!point) return []
+
+            return [
+              `Sesiones activas en ese minuto: ${point.aggregateSampleCount}`,
+              `Activar fallback: ${point.shouldActivateOwnEstimate ? 'si' : 'no'}`
+            ]
+          }
+        }
+      },
+      zoom: {
+        limits: {
+          x: { min: 'original', max: 'original' },
+          y: { min: 0, max: 300 }
+        },
+        pan: {
+          enabled: true,
+          mode: 'xy',
+          modifierKey: 'alt',
+          threshold: 2,
+          onPan: ({ chart }) => handleSynchronizedPan(chart),
+          onPanStart: ({ chart, event }) => startSynchronizedPan(chart, event),
+          onPanComplete: ({ chart }) => completeSynchronizedPan(chart)
+        },
+        zoom: {
+          mode: 'xy',
+          onZoomComplete: ({ chart }) => syncCalibrationZoom(chart),
+          wheel: {
+            enabled: true,
+            modifierKey: 'alt'
+          },
+          pinch: {
+            enabled: false
+          },
+          drag: {
+            enabled: false
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 300, // EJE Y fijo para mostrar bien la banda de activación y evitar zooms extremos
+        title: {
+          display: true,
+          text: 'Estimacion temporal (minutos)',
+          font: {
+            size: 13,
+            weight: '500'
+          }
+        },
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)'
+        }
+      },
+      x: {
+        title: {
+          display: true,
+          text: `Tiempo transcurrido real (min) | Sesion foco: ${focusSessionLabel}`,
+          font: {
+            size: 13,
+            weight: '500'
+          }
+        },
+        ticks: {
+          autoSkip: true,
+          maxTicksLimit: 14,
+          callback: function(value) {
+            return `${this.getLabelForValue(value)} min`
+          }
+        },
+        grid: {
+          display: false
+        }
+      }
+    }
+  }), [focusSessionLabel, isCalibrationTooltipEnabled, wadCalibrationTimelineExperiment])
+
   return (
     <div className="comparison-view">
       <h2>Vista de Comparación ({sessions.length} sesiones)</h2>
+
+      <div className="comparison-calibration-panel">
+        <div className="comparison-calibration-header">
+          <div className="chart-header">
+            <h3>Calibracion experimental WAD</h3>
+            <ChartTooltip text="Usa todas las sesiones seleccionadas sobre un eje comun de porcentaje de bateria. Cada curva de color representa la estimacion vendor de una sesion WAD. La linea verde es la estimacion propia basada en la media real agregada, y las lineas amarillas delimitan la banda donde el vendor seguiria siendo aceptable para la sesion foco." />
+          </div>
+          <div className="comparison-calibration-intros">
+            <div className="comparison-calibration-intro-card">
+              <h4>Vista por bateria</h4>
+              <div className="comparison-calibration-explanation">
+                <p>
+                  Este grafico compara todas las estimaciones WAD sobre una misma escala: el porcentaje de bateria. Asi puedes ver si varios WAD cuentan una historia parecida o si alguno se desvía demasiado.
+                </p>
+                <p>
+                  Las lineas de colores son lo que reporta cada WAD. La linea roja marca el tiempo real restante de la sesion foco. La verde es la estimacion propia calculada con la media real observada entre los WADs visibles para ese mismo porcentaje de bateria.
+                </p>
+                <p>
+                  Las lineas amarillas forman una banda de tolerancia. Si la estimacion vendor de la sesion foco se sale de esa banda, los puntos naranjas indican que ahi entraria vuestro fallback.
+                </p>
+                <p className="comparison-calibration-usage-note">
+                  Interaccion: Alt + rueda para zoom en X e Y. Alt + arrastrar para navegar.
+                </p>
+              </div>
+            </div>
+
+            <div className="comparison-calibration-intro-card">
+              <h4>Vista por tiempo real</h4>
+              <div className="comparison-calibration-explanation">
+                <p>
+                  Esta vista usa el tiempo real en el eje X. Por eso las curvas de cada WAD terminan exactamente cuando acaba su sesion y la linea roja de la sesion foco cae como una diagonal natural hasta cero.
+                </p>
+                <p>
+                  La linea verde ya no es una media por porcentaje de bateria, sino la media del tiempo restante que quedaba en ese minuto entre los WADs visibles que seguian activos. La banda amarilla usa una tolerancia inferior y otra superior para poder afinar mejor el criterio.
+                </p>
+                <p className="comparison-calibration-usage-note">
+                  Interaccion: Alt + rueda para zoom en X e Y. Alt + arrastrar para navegar.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          className={`comparison-chart comparison-calibration-chart${isAltPressed && hoveredPanChartKey === 'battery' ? ' is-pan-ready' : ''}${activePanChartKey === 'battery' ? ' is-panning' : ''}`}
+          style={{ backgroundColor: '#f6fcfb' }}
+          onMouseEnter={() => setHoveredPanChartKey('battery')}
+          onMouseLeave={() => setHoveredPanChartKey((current) => (current === 'battery' ? null : current))}
+        >
+          <div className="chart-container" style={{ height: '700px', minHeight: '700px' }}>
+            <Line ref={batteryCalibrationChartRef} data={wadCalibrationChartData} options={wadCalibrationOptions} />
+            {!isCalibrationTooltipEnabled && hoveredCalibrationSeries?.label && (
+              <div
+                className="comparison-calibration-hover-tooltip"
+                style={{
+                  left: `${hoveredCalibrationSeries.x + 10}px`,
+                  top: `${hoveredCalibrationSeries.y + 10}px`
+                }}
+              >
+                {hoveredCalibrationSeries.label}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="comparison-calibration-center-panel">
+          <div className="comparison-calibration-legend is-centered">
+            <div className="comparison-calibration-legend-items is-centered">
+              {wadLegendItems.map((item) => (
+                <button
+                  key={item.groupKey}
+                  type="button"
+                  className={`comparison-calibration-legend-item${item.emphasis ? ' is-emphasis' : ''}${item.hidden ? ' is-hidden' : ''}`}
+                  onClick={() => toggleCalibrationGroup(item.groupKey)}
+                  aria-pressed={!item.hidden}
+                >
+                  <span className={`comparison-calibration-legend-swatch is-${item.lineStyle}`} style={{ '--legend-color': item.color }} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="comparison-calibration-legend-items is-secondary-row is-centered">
+              {calibrationReferenceLegendItems.map((item) => (
+                <button
+                  key={item.groupKey}
+                  type="button"
+                  className={`comparison-calibration-legend-item${item.hidden ? ' is-hidden' : ''}`}
+                  onClick={() => toggleCalibrationGroup(item.groupKey)}
+                  aria-pressed={!item.hidden}
+                >
+                  <span className={`comparison-calibration-legend-swatch is-${item.lineStyle}`} style={{ '--legend-color': item.color }} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="comparison-calibration-metrics is-single-row">
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">WADs</span>
+              <strong>{visibleCalibrationSessions.length} / {sessions.length}</strong>
+            </div>
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">Sesion foco</span>
+              <strong>{focusSessionLabel}</strong>
+            </div>
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">Tol. inferior</span>
+              <strong>-{wadCalibrationExperiment.lowerToleranceMinutes} min</strong>
+            </div>
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">Tol. superior</span>
+              <strong>+{wadCalibrationExperiment.upperToleranceMinutes} min</strong>
+            </div>
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">Fallback bateria</span>
+              <strong>{wadCalibrationExperiment.activationCount} / {wadCalibrationExperiment.bucketSeries.length}</strong>
+            </div>
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">Cobertura bateria</span>
+              <strong>{wadCalibrationExperiment.coverageCount}</strong>
+            </div>
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">Duracion foco</span>
+              <strong>{wadCalibrationTimelineExperiment.focusDurationMin} min</strong>
+            </div>
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">Horizonte</span>
+              <strong>{wadCalibrationTimelineExperiment.maxElapsedMinute} min</strong>
+            </div>
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">Fallback tiempo</span>
+              <strong>{wadCalibrationTimelineExperiment.activationCount} / {wadCalibrationTimelineExperiment.timeSeries.length}</strong>
+            </div>
+            <div className="comparison-calibration-chip is-compact">
+              <span className="comparison-calibration-label">Cobertura tiempo</span>
+              <strong>{wadCalibrationTimelineExperiment.coverageCount}</strong>
+            </div>
+          </div>
+
+          <div className="comparison-calibration-toolbar is-below-chart is-centered-layout">
+            <div className="comparison-calibration-focus-control">
+              <label className="comparison-calibration-focus-label" htmlFor="wad-focus-session">
+                Sesion foco
+              </label>
+              <select
+                id="wad-focus-session"
+                className="comparison-calibration-focus-select"
+                value={effectiveFocusSessionIndex}
+                onChange={(event) => {
+                  const nextIndex = Number(event.target.value)
+                  if (!Number.isNaN(nextIndex)) {
+                    setFocusSessionIndex(nextIndex)
+                  }
+                }}
+              >
+                {visibleFocusSessions.map((session) => (
+                  <option key={`${session.label}-${session.index}`} value={session.index}>
+                    {session.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="comparison-calibration-tolerance-control">
+              <label className="comparison-calibration-tolerance-label" htmlFor="wad-tolerance-lower-range">
+                Tolerancia inferior
+              </label>
+              <input
+                id="wad-tolerance-lower-range"
+                className="comparison-calibration-tolerance-range"
+                type="range"
+                min="0"
+                max="60"
+                step="1"
+                value={lowerToleranceMinutes}
+                onChange={(event) => updateToleranceMinutes('lower', event.target.value)}
+              />
+              <input
+                className="comparison-calibration-tolerance-input"
+                type="number"
+                min="0"
+                max="60"
+                step="1"
+                value={lowerToleranceMinutes}
+                onChange={(event) => updateToleranceMinutes('lower', event.target.value)}
+                aria-label="Tolerancia inferior en minutos"
+              />
+              <span className="comparison-calibration-tolerance-suffix">min</span>
+            </div>
+
+            <div className="comparison-calibration-tolerance-control">
+              <label className="comparison-calibration-tolerance-label" htmlFor="wad-tolerance-upper-range">
+                Tolerancia superior
+              </label>
+              <input
+                id="wad-tolerance-upper-range"
+                className="comparison-calibration-tolerance-range"
+                type="range"
+                min="0"
+                max="60"
+                step="1"
+                value={upperToleranceMinutes}
+                onChange={(event) => updateToleranceMinutes('upper', event.target.value)}
+              />
+              <input
+                className="comparison-calibration-tolerance-input"
+                type="number"
+                min="0"
+                max="60"
+                step="1"
+                value={upperToleranceMinutes}
+                onChange={(event) => updateToleranceMinutes('upper', event.target.value)}
+                aria-label="Tolerancia superior en minutos"
+              />
+              <span className="comparison-calibration-tolerance-suffix">min</span>
+            </div>
+
+            <button
+              type="button"
+              className="comparison-calibration-zoom-reset"
+              onClick={resetChartZoom}
+            >
+              Reset zoom
+            </button>
+
+            <label className="comparison-calibration-toggle">
+              <input
+                type="checkbox"
+                checked={isCalibrationTooltipEnabled}
+                onChange={(event) => setIsCalibrationTooltipEnabled(event.target.checked)}
+              />
+              <span>Tooltip completo</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="comparison-calibration-subsection">
+          <div
+            className={`comparison-chart comparison-calibration-chart is-timeline${isAltPressed && hoveredPanChartKey === 'timeline' ? ' is-pan-ready' : ''}${activePanChartKey === 'timeline' ? ' is-panning' : ''}`}
+            style={{ backgroundColor: '#fffaf1' }}
+            onMouseEnter={() => setHoveredPanChartKey('timeline')}
+            onMouseLeave={() => setHoveredPanChartKey((current) => (current === 'timeline' ? null : current))}
+          >
+            <div className="chart-container" style={{ height: '700px', minHeight: '700px' }}>
+              <Line ref={timelineCalibrationChartRef} data={wadCalibrationTimelineChartData} options={wadCalibrationTimelineOptions} />
+              {!isCalibrationTooltipEnabled && hoveredTimelineSeries?.label && (
+                <div
+                  className="comparison-calibration-hover-tooltip"
+                  style={{
+                    left: `${hoveredTimelineSeries.x + 10}px`,
+                    top: `${hoveredTimelineSeries.y + 10}px`
+                  }}
+                >
+                  {hoveredTimelineSeries.label}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+      </div>
       
       {/* Gráficas de Duración de Dispositivos */}
       <div className="comparison-charts">
