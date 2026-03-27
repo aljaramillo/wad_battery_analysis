@@ -2,6 +2,26 @@ import { useState, useRef } from 'react'
 import { parseCSV, parseSummaryText } from '../utils/csvParser'
 import './FileUploader.css'
 
+const BATTERY_FILE_PATTERN = /^(battery-(?:debug|summary))_(.+)_(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})\.(csv|txt)$/
+
+const parseBatteryFileName = (fileName) => {
+  const match = fileName.match(BATTERY_FILE_PATTERN)
+
+  if (!match) {
+    return null
+  }
+
+  const [, prefix, sessionId, timestamp, extension] = match
+
+  return {
+    prefix,
+    sessionId,
+    timestamp,
+    extension,
+    groupKey: `${sessionId}_${timestamp}`
+  }
+}
+
 function FileUploader({ onFilesLoaded }) {
   const [isDragging, setIsDragging] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -46,33 +66,39 @@ function FileUploader({ onFilesLoaded }) {
     try {
       const sessions = []
 
-      // Group files by identifier (extract from filename)
+      // Group files by full session key so identifiers like WAD-AA-0035_001 remain unique.
       const fileGroups = new Map()
 
       csvFiles.forEach(file => {
-        const match = file.name.match(/battery-debug_([^_]+)_(.+)\.csv/)
-        if (match) {
-          const id = match[1]
-          if (!fileGroups.has(id)) {
-            fileGroups.set(id, {})
+        const parsed = parseBatteryFileName(file.name)
+        if (parsed?.prefix === 'battery-debug') {
+          if (!fileGroups.has(parsed.groupKey)) {
+            fileGroups.set(parsed.groupKey, {
+              sessionKey: parsed.groupKey,
+              id: parsed.sessionId,
+              timestamp: parsed.timestamp
+            })
           }
-          fileGroups.get(id).csv = file
+          fileGroups.get(parsed.groupKey).csv = file
         }
       })
 
       txtFiles.forEach(file => {
-        const match = file.name.match(/battery-summary_([^_]+)_(.+)\.txt/)
-        if (match) {
-          const id = match[1]
-          if (!fileGroups.has(id)) {
-            fileGroups.set(id, {})
+        const parsed = parseBatteryFileName(file.name)
+        if (parsed?.prefix === 'battery-summary') {
+          if (!fileGroups.has(parsed.groupKey)) {
+            fileGroups.set(parsed.groupKey, {
+              sessionKey: parsed.groupKey,
+              id: parsed.sessionId,
+              timestamp: parsed.timestamp
+            })
           }
-          fileGroups.get(id).txt = file
+          fileGroups.get(parsed.groupKey).txt = file
         }
       })
 
       // Process each group
-      for (const [id, group] of fileGroups.entries()) {
+      for (const [, group] of fileGroups.entries()) {
         if (group.csv) {
           const csvData = await parseCSV(group.csv)
           let summary = { surgeryDate: 'Desconocido', duration: 0 }
@@ -83,7 +109,8 @@ function FileUploader({ onFilesLoaded }) {
           }
 
           sessions.push({
-            id,
+            sessionKey: group.sessionKey,
+            id: group.id,
             data: csvData,
             summary,
             fileName: group.csv.name,

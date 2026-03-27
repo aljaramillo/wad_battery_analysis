@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Battery Summary Metadata</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4efe6;
+      --panel: #fffaf2;
+      --line: #d3c3aa;
+      --text: #2f2418;
+      --accent: #8c5e34;
+      --accent-soft: #efe2cf;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: linear-gradient(180deg, #f7f2ea 0%, #efe6d8 100%);
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 28px;
+      color: var(--accent);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(75, 52, 24, 0.08);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1100px;
+    }
+
+    thead {
+      background: var(--accent-soft);
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    tbody tr:nth-child(even) {
+      background: rgba(239, 226, 207, 0.35);
+    }
+  </style>
+</head>
+<body>
+  <h1>Battery Summary Metadata</h1>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>testName</th><th>wadFirmware</th><th>duration</th><th>surgeryDate</th><th>wadBatteryInitial</th><th>startTime</th><th>endTime</th><th>wadQuality</th><th>lightSourceSerial</th><th>lightSourceIntensity</th><th>lightSourceFirmware</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>WAD-A-0001_001</td><td>2.0.3_20260319-1743</td><td>212</td><td>24/3/2026</td><td>99</td><td>10:47:51</td><td>14:19:31</td><td>2160p 60fps</td><td>LS-AA-0036</td><td>0/5</td><td>2.0.1_m5_ble_new</td></tr>
+<tr><td>WAD-A-0001_002</td><td>2.0.3_20260319-1743</td><td>209</td><td>24/3/2026</td><td>99</td><td>18:49:02</td><td>22:17:40</td><td>2160p 60fps</td><td>LS-AA-0036</td><td>0/5</td><td>2.0.1_m5_ble_new</td></tr>
+<tr><td>WAD-A-0001_003</td><td>2.0.3_20260319-1743</td><td>210</td><td>25/3/2026</td><td>0</td><td>17:43:30</td><td>21:13:40</td><td>2160p 60fps</td><td>--</td><td>0/5</td><td>--</td></tr>
+<tr><td>WAD-AA-0000_001</td><td></td><td>199</td><td>27/1/2026</td><td>98</td><td>22:26:53</td><td>1:46:01</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td></td></tr>
+<tr><td>WAD-AA-0000_002</td><td>2.0.3_20260302-1115</td><td>223</td><td>3/3/2026</td><td>81</td><td>0:54:06</td><td>4:36:51</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>1/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_003</td><td>2.0.3_20260303-0757</td><td>229</td><td>3/3/2026</td><td>99</td><td>14:48:21</td><td>18:37:10</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_004</td><td>2.0.3_20260303-0757</td><td>235</td><td>3/3/2026</td><td>99</td><td>22:22:48</td><td>2:17:49</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_005</td><td>2.0.3_20260303-0757</td><td>235</td><td>4/3/2026</td><td>99</td><td>17:22:22</td><td>21:17:02</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_006</td><td>2.0.3_20260303-0757</td><td>224</td><td>11/3/2026</td><td>99</td><td>11:57:55</td><td>15:42:24</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_007</td><td>2.0.3_20260303-0757</td><td>224</td><td>12/3/2026</td><td>99</td><td>10:01:55</td><td>13:45:57</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_008</td><td>2.0.3_20260303-0757</td><td>120</td><td>12/3/2026</td><td>55</td><td>15:08:04</td><td>17:07:54</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_009</td><td>2.0.3_20260313-0922</td><td>230</td><td>13/3/2026</td><td>99</td><td>21:17:20</td><td>1:07:49</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_010</td><td>2.0.3_20260313-0922</td><td>229</td><td>15/3/2026</td><td>99</td><td>10:03:33</td><td>13:52:04</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_011</td><td>2.0.3_20260313-0922</td><td>253</td><td>15/3/2026</td><td>99</td><td>23:09:45</td><td>3:22:51</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0000_012</td><td>2.0.3_20260316-1109</td><td>213</td><td>17/3/2026</td><td>93</td><td>10:04:00</td><td>13:37:16</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_m5_ble</td></tr>
+<tr><td>WAD-AA-0000_013</td><td>2.0.3_20260316-1109</td><td>221</td><td>18/3/2026</td><td>99</td><td>11:50:21</td><td>15:31:23</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_m5_ble</td></tr>
+<tr><td>WAD-AA-0035_001</td><td></td><td>127</td><td>26/1/2026</td><td>97</td><td>10:08:00</td><td>12:14:32</td><td>undefinedp undefinedfps</td><td>LS-AA-0034</td><td>0/5</td><td></td></tr>
+<tr><td>WAD-AA-0066_001</td><td>2.0.0_20240521-0015</td><td>225</td><td>3/2/2026</td><td>99</td><td>9:32:29</td><td>13:17:22</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.0</td></tr>
+<tr><td>WAD-AA-0066_002</td><td>2.0.0_20240521-0015</td><td>227</td><td>3/2/2026</td><td>99</td><td>19:19:04</td><td>23:06:28</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.0</td></tr>
+<tr><td>WAD-AA-0066_003</td><td>2.0.0_20240521-0015</td><td>221</td><td>4/2/2026</td><td>0</td><td>10:36:33</td><td>14:17:33</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>--</td></tr>
+<tr><td>WAD-AA-0066_004</td><td>2.0.0_20240521-0015</td><td>216</td><td>5/2/2026</td><td>98</td><td>13:34:00</td><td>17:09:43</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0066_005</td><td>2.0.0_20240521-0015</td><td>217</td><td>6/2/2026</td><td>99</td><td>14:39:07</td><td>18:16:00</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0066_006</td><td>2.0.0_20240521-0015</td><td>209</td><td>8/2/2026</td><td>99</td><td>17:28:07</td><td>20:57:26</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0066_007</td><td>2.0.0_20240521-0015</td><td>210</td><td>10/2/2026</td><td>97</td><td>9:14:10</td><td>12:44:12</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0066_008</td><td>2.0.0_20240521-0015</td><td>317</td><td>11/2/2026</td><td>99</td><td>11:01:12</td><td>16:18:15</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0066_009</td><td>2.0.0_20240521-0015</td><td>205</td><td>12/2/2026</td><td>98</td><td>9:33:21</td><td>12:58:42</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AA-0066_010</td><td>2.0.3_20260319-1743</td><td>200</td><td>24/3/2026</td><td>99</td><td>10:46:41</td><td>14:06:59</td><td>2160p 60fps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_m5_ble</td></tr>
+<tr><td>WAD-AA-0066_011</td><td>2.0.3_20260319-1743</td><td>177</td><td>24/3/2026</td><td>99</td><td>17:37:55</td><td>20:35:16</td><td>2160p 60fps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_m5_ble</td></tr>
+<tr><td>WAD-AA-0066_012</td><td>2.0.3_20260319-1743</td><td>178</td><td>24/3/2026</td><td>0</td><td>23:25:31</td><td>2:23:30</td><td>2160p 60fps</td><td>--</td><td>0/5</td><td>--</td></tr>
+<tr><td>WAD-AA-0066_013</td><td>2.0.3_20260319-1743</td><td>239</td><td>25/3/2026</td><td>0</td><td>22:34:46</td><td>2:34:08</td><td>2160p 60fps</td><td>--</td><td>0/5</td><td>--</td></tr>
+<tr><td>WAD-AB-0017_001</td><td>2.0.3_20260319-1743</td><td>130</td><td>24/3/2026</td><td>99</td><td>15:04:23</td><td>17:14:22</td><td>2160p 60fps</td><td>LS-AA-0036</td><td>0/5</td><td>2.0.1_m5_ble_new</td></tr>
+<tr><td>WAD-AB-0017_002</td><td>2.0.3_20260319-1743</td><td>86</td><td>24/3/2026</td><td>0</td><td>20:42:49</td><td>22:09:10</td><td>2160p 60fps</td><td>LS-AA-0090</td><td>0/5</td><td>--</td></tr>
+<tr><td>WAD-AB-0017_003</td><td>2.0.3_20260319-1743</td><td>145</td><td>25/3/2026</td><td>0</td><td>17:43:27</td><td>20:08:30</td><td>2160p 60fps</td><td>--</td><td>0/5</td><td>--</td></tr>
+<tr><td>WAD-AB-0017_004</td><td>2.0.3_20260319-1743</td><td>105</td><td>26/3/2026</td><td>0</td><td>10:57:53</td><td>12:42:45</td><td>2160p 60fps</td><td>--</td><td>0/5</td><td>--</td></tr>
+<tr><td>WAD-AB-0044_001</td><td></td><td>225</td><td>27/1/2026</td><td>99</td><td>15:47:09</td><td>19:32:11</td><td>undefinedp undefinedfps</td><td>LS-AA-0034</td><td>0/5</td><td></td></tr>
+<tr><td>WAD-AB-0044_002</td><td>2.0.2_20241011-1254</td><td>232</td><td>29/1/2026</td><td>99</td><td>9:26:26</td><td>13:18:52</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_003</td><td>2.0.2_20241011-1254</td><td>232</td><td>29/1/2026</td><td>99</td><td>14:52:12</td><td>18:44:33</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_004</td><td>2.0.2_20241011-1254</td><td>230</td><td>30/1/2026</td><td>99</td><td>7:02:30</td><td>10:52:26</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_005</td><td>2.0.2_20241011-1254</td><td>225</td><td>30/1/2026</td><td>99</td><td>13:30:34</td><td>17:15:48</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_006</td><td>2.0.2_20241011-1254</td><td>230</td><td>31/1/2026</td><td>99</td><td>12:08:45</td><td>15:58:29</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_007</td><td>2.0.2_20241011-1254</td><td>231</td><td>31/1/2026</td><td>99</td><td>22:48:45</td><td>2:40:07</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_008</td><td>2.0.2_20241011-1254</td><td>228</td><td>1/2/2026</td><td>99</td><td>17:33:57</td><td>21:22:26</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_009</td><td>2.0.3_20260216-1338</td><td>225</td><td>16/2/2026</td><td>98</td><td>23:17:32</td><td>3:02:52</td><td>undefinedp undefinedfps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AB-0044_010</td><td>2.0.3_20260216-1338</td><td>237</td><td>17/2/2026</td><td>99</td><td>16:51:33</td><td>20:48:56</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_011</td><td>2.0.3_20260216-1338</td><td>235</td><td>18/2/2026</td><td>98</td><td>7:51:20</td><td>11:46:26</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_012</td><td>2.0.3_20260218-1056</td><td>208</td><td>18/2/2026</td><td>97</td><td>16:55:00</td><td>20:23:10</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_013</td><td>2.0.3_20260218-1056</td><td>192</td><td>18/2/2026</td><td>99</td><td>21:03:20</td><td>0:14:59</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_014</td><td>2.0.3_20260218-1056</td><td>175</td><td>19/2/2026</td><td>99</td><td>17:19:53</td><td>20:15:04</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_015</td><td>2.0.3_20260218-1056</td><td>38</td><td>19/2/2026</td><td>0</td><td>21:40:45</td><td>22:19:10</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_016</td><td>2.0.3_20260218-1056</td><td>219</td><td>22/2/2026</td><td>99</td><td>14:37:30</td><td>18:16:48</td><td>undefinedp undefinedfps</td><td>LS-AA-0044</td><td>0/5</td><td>2.0.1_rc</td></tr>
+<tr><td>WAD-AB-0044_017</td><td>2.0.3_20260319-1743</td><td>217</td><td>24/3/2026</td><td>99</td><td>15:05:46</td><td>18:42:27</td><td>2160p 60fps</td><td>LS-AA-0090</td><td>0/5</td><td>2.0.1</td></tr>
+<tr><td>WAD-AB-0044_018</td><td>2.0.3_20260319-1743</td><td>220</td><td>24/3/2026</td><td>0</td><td>22:13:04</td><td>1:53:16</td><td>2160p 60fps</td><td>--</td><td>0/5</td><td>--</td></tr>
+<tr><td>WAD-AB-0044_019</td><td>2.0.3_20260319-1743</td><td>209</td><td>25/3/2026</td><td>0</td><td>12:02:55</td><td>15:32:23</td><td>2160p 60fps</td><td>--</td><td>0/5</td><td>--</td></tr>
+<tr><td>WAD-AB-0044_020</td><td>2.0.3_20260319-1743</td><td>262</td><td>25/3/2026</td><td>0</td><td>22:34:46</td><td>2:56:21</td><td>2160p 60fps</td><td>--</td><td>0/5</td><td>--</td></tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

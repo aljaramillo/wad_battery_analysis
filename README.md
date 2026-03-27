@@ -48,8 +48,10 @@ npm run dev
 Arrastra y suelta archivos CSV (y opcionalmente TXT) en el área de carga, o haz clic para seleccionarlos.
 
 **Formato esperado:**
-- `battery-debug_XXXXXXX_YYYY-MM-DDTHH-MM-SS.csv` - Datos detallados
-- `battery-summary_XXXXXXX_YYYY-MM-DDTHH-MM-SS.txt` - Resumen (opcional)
+- `battery-debug_IDENTIFICADOR_YYYY-MM-DDTHH-MM-SS.csv` - Datos detallados
+- `battery-summary_IDENTIFICADOR_YYYY-MM-DDTHH-MM-SS.txt` - Resumen (opcional)
+
+`IDENTIFICADOR` puede ser el formato antiguo (`test0007`) o el nuevo (`WAD-AA-0035_001`).
 
 ### 2. Seleccionar Sesiones
 
@@ -80,7 +82,44 @@ Surgery Time,Timestamp,WAD Battery %,WAD Duration (min),WAD Quality,Light Source
 npm run dev      # Inicia servidor de desarrollo
 npm run build    # Compila para producción
 npm run preview  # Preview de producción local
+npm run rename:battery-tests -- [carpeta] [--apply]  # Renombra CSV/TXT por WAD Serial y orden cronológico
+npm run export:battery-summary-metadata -- [carpeta] [archivo-salida]  # Exporta metadatos de los TXT a CSV, XLSX y HTML
 ```
+
+## 🗂️ Renombrado Masivo de Pruebas
+
+El script `npm run rename:battery-tests -- [carpeta] [--apply]`:
+
+- Lee cada `battery-summary_*.txt`
+- Extrae `WAD Serial:` del contenido
+- Ordena las sesiones por fecha usando la marca temporal del nombre
+- Sustituye solo el bloque intermedio del nombre por `WAD-SERIAL_001`, `WAD-SERIAL_002`, etc.
+
+Ejemplos:
+
+```bash
+npm run rename:battery-tests
+npm run rename:battery-tests -- tests_batteryApoloAnalysis --apply
+npm run rename:battery-tests -- "D:/copias/originales" --apply
+```
+
+## 📄 Exportación de Metadatos de Pruebas
+
+El script `npm run export:battery-summary-metadata -- [carpeta] [archivo-salida]` genera un CSV, un Excel `.xlsx` y una tabla HTML a partir de los `battery-summary_*.txt` con estos campos:
+
+- `testName`
+- `wadFirmware`, `duration`, `surgeryDate`
+- `wadBatteryInitial`, `startTime`, `endTime`, `wadQuality`
+- `lightSourceSerial`, `lightSourceIntensity`, `lightSourceFirmware`
+
+Ejemplos:
+
+```bash
+npm run export:battery-summary-metadata -- tests_batteryApoloAnalysis
+npm run export:battery-summary-metadata -- tests_batteryApoloAnalysis ./tests_batteryApoloAnalysis/resumen-pruebas.csv
+```
+
+Si el archivo de salida es `resumen.csv`, el script también crea `resumen.xlsx` y `resumen.html`.
 
 ## 📁 Estructura del Proyecto
 

@@ -7,12 +7,13 @@ import './App.css'
 
 function App() {
   const [sessions, setSessions] = useState([])
-  const [selectedSessions, setSelectedSessions] = useState([])
+  const [selectedSessionKeys, setSelectedSessionKeys] = useState([])
   const [draggedIndex, setDraggedIndex] = useState(null)
 
   const handleFilesLoaded = useCallback((newSessions) => {
     const sessionsWithNames = newSessions.map(session => ({
       ...session,
+      sessionKey: session.sessionKey || session.fileName,
       customName: session.summary.customName || session.customName || session.id || '',
       notes: session.summary.notes || session.notes || ''
     }))
@@ -25,7 +26,11 @@ function App() {
     })
     
     setSessions(prev => {
-      const combined = [...prev, ...sessionsWithNames]
+      const mergedByKey = new Map(prev.map(session => [session.sessionKey, session]))
+      sessionsWithNames.forEach(session => {
+        mergedByKey.set(session.sessionKey, session)
+      })
+      const combined = Array.from(mergedByKey.values())
       // Reordenar todo el array por fecha y hora
       combined.sort((a, b) => {
         const dateTimeA = new Date(`${a.summary.surgeryDate || '1/1/1970'} ${a.summary.startTime || '00:00:00'}`)
@@ -35,35 +40,36 @@ function App() {
       return combined
     })
     
-    setSelectedSessions(prev => {
-      const newIndices = sessionsWithNames.map((_, idx) => sessions.length + idx)
-      return [...prev, ...newIndices]
+    setSelectedSessionKeys(prev => {
+      const next = new Set(prev)
+      sessionsWithNames.forEach(session => next.add(session.sessionKey))
+      return Array.from(next)
     })
-  }, [sessions.length])
+  }, [])
 
-  const handleSessionNameChange = useCallback((index, newName) => {
-    setSessions(prev => prev.map((session, idx) => 
-      idx === index ? { ...session, customName: newName } : session
+  const handleSessionNameChange = useCallback((sessionKey, newName) => {
+    setSessions(prev => prev.map((session) => 
+      session.sessionKey === sessionKey ? { ...session, customName: newName } : session
     ))
   }, [])
 
-  const handleNotesChange = useCallback((index, newNotes) => {
-    setSessions(prev => prev.map((session, idx) => 
-      idx === index ? { ...session, notes: newNotes } : session
+  const handleNotesChange = useCallback((sessionKey, newNotes) => {
+    setSessions(prev => prev.map((session) => 
+      session.sessionKey === sessionKey ? { ...session, notes: newNotes } : session
     ))
   }, [])
 
-  const handleSessionToggle = useCallback((index) => {
-    setSelectedSessions(prev => 
-      prev.includes(index) 
-        ? prev.filter(i => i !== index)
-        : [...prev, index]
+  const handleSessionToggle = useCallback((sessionKey) => {
+    setSelectedSessionKeys(prev => 
+      prev.includes(sessionKey) 
+        ? prev.filter(key => key !== sessionKey)
+        : [...prev, sessionKey]
     )
   }, [])
 
-  const handleRemoveSession = useCallback((index) => {
-    setSessions(prev => prev.filter((_, i) => i !== index))
-    setSelectedSessions(prev => prev.filter(i => i !== index).map(i => i > index ? i - 1 : i))
+  const handleRemoveSession = useCallback((sessionKey) => {
+    setSessions(prev => prev.filter(session => session.sessionKey !== sessionKey))
+    setSelectedSessionKeys(prev => prev.filter(key => key !== sessionKey))
   }, [])
 
   const handleDragStart = useCallback((index) => {
@@ -82,22 +88,8 @@ function App() {
     const [draggedSession] = newSessions.splice(draggedIndex, 1)
     newSessions.splice(targetIndex, 0, draggedSession)
     setSessions(newSessions)
-
-    // Actualizar los índices seleccionados
-    const newSelectedSessions = selectedSessions.map(idx => {
-      if (idx === draggedIndex) return targetIndex
-      if (draggedIndex < targetIndex) {
-        // Moviendo hacia abajo
-        if (idx > draggedIndex && idx <= targetIndex) return idx - 1
-      } else {
-        // Moviendo hacia arriba
-        if (idx >= targetIndex && idx < draggedIndex) return idx + 1
-      }
-      return idx
-    })
-    setSelectedSessions(newSelectedSessions)
     setDraggedIndex(null)
-  }, [draggedIndex, sessions, selectedSessions])
+  }, [draggedIndex, sessions])
 
   const handleDragEnd = useCallback(() => {
     setDraggedIndex(null)
@@ -105,8 +97,7 @@ function App() {
 
   // Mantener el orden de las sesiones (no el orden de selección)
   const selectedSessionsData = useMemo(() => sessions
-    .map((session, idx) => selectedSessions.includes(idx) ? session : null)
-    .filter(Boolean), [sessions, selectedSessions])
+    .filter(session => selectedSessionKeys.includes(session.sessionKey)), [sessions, selectedSessionKeys])
 
   return (
     <div className="app">
@@ -129,8 +120,8 @@ function App() {
               {sessions.map((session, idx) => {
                 return (
                 <div 
-                  key={idx} 
-                  className={`session-item ${selectedSessions.includes(idx) ? 'selected' : ''} ${draggedIndex === idx ? 'dragging' : ''}`}
+                  key={session.sessionKey} 
+                  className={`session-item ${selectedSessionKeys.includes(session.sessionKey) ? 'selected' : ''} ${draggedIndex === idx ? 'dragging' : ''}`}
                   draggable
                   onDragStart={() => handleDragStart(idx)}
                   onDragOver={handleDragOver}
@@ -142,16 +133,16 @@ function App() {
                   </div>
                   <input
                     type="checkbox"
-                    checked={selectedSessions.includes(idx)}
-                    onChange={() => handleSessionToggle(idx)}
-                    id={`session-${idx}`}
+                    checked={selectedSessionKeys.includes(session.sessionKey)}
+                    onChange={() => handleSessionToggle(session.sessionKey)}
+                    id={`session-${session.sessionKey}`}
                   />
                   <div className="session-info">
                     <input
                       type="text"
                       className="session-name-input"
                       value={session.customName}
-                      onChange={(e) => handleSessionNameChange(idx, e.target.value)}
+                      onChange={(e) => handleSessionNameChange(session.sessionKey, e.target.value)}
                       placeholder="Nombre de sesión..."
                       onClick={(e) => e.stopPropagation()}
                     />
@@ -161,7 +152,7 @@ function App() {
                   </div>
                   <button 
                     className="remove-btn"
-                    onClick={() => handleRemoveSession(idx)}
+                    onClick={() => handleRemoveSession(session.sessionKey)}
                     title="Eliminar sesión"
                   >
                     ✕
@@ -186,7 +177,7 @@ function App() {
               <>
                 <StatisticsPanel 
                   session={selectedSessionsData[0]} 
-                  onNotesChange={(notes) => handleNotesChange(selectedSessions[0], notes)}
+                  onNotesChange={(notes) => handleNotesChange(selectedSessionsData[0].sessionKey, notes)}
                 />
                 <DataTable session={selectedSessionsData[0]} />
               </>
@@ -198,14 +189,14 @@ function App() {
                     <h2 className="comparison-session-title">{selectedSessionsData[0].customName || selectedSessionsData[0].summary.surgeryDate}</h2>
                     <StatisticsPanel 
                       session={selectedSessionsData[0]} 
-                      onNotesChange={(notes) => handleNotesChange(selectedSessions[0], notes)}
+                      onNotesChange={(notes) => handleNotesChange(selectedSessionsData[0].sessionKey, notes)}
                     />
                   </div>
                   <div className="comparison-column">
                     <h2 className="comparison-session-title">{selectedSessionsData[1].customName || selectedSessionsData[1].summary.surgeryDate}</h2>
                     <StatisticsPanel 
                       session={selectedSessionsData[1]} 
-                      onNotesChange={(notes) => handleNotesChange(selectedSessions[1], notes)}
+                      onNotesChange={(notes) => handleNotesChange(selectedSessionsData[1].sessionKey, notes)}
                     />
                   </div>
                 </div>
@@ -224,7 +215,7 @@ function App() {
               <>
                 <ComparisonView sessions={selectedSessionsData} />
                 {selectedSessionsData.map((session, idx) => (
-                  <DataTable key={idx} session={session} />
+                  <DataTable key={session.sessionKey} session={session} />
                 ))}
               </>
             )}
